@@ -143,14 +143,6 @@
             text-align: center;
         }
 
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
         .btn {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.3);
@@ -182,8 +174,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌱 Multi-Node Environmental Monitor</h1>
-            <p>Real-time monitoring 4 node sensor dengan teknologi LoRa</p>
+            <h1>Dashboard Monitoring</h1>
+            <p>Real-time monitoring 4 node sensor</p>
         </div>
 
         <div class="cards-grid" id="cardsGrid">
@@ -192,11 +184,6 @@
 
         <div class="chart-container">
             <div class="chart-title">Grafik Monitoring 24 Jam Terakhir - Semua Node</div>
-            <div class="controls">
-                <button class="btn active" onclick="setPeriod('24h')">24 Jam</button>
-                <button class="btn" onclick="setPeriod('12h')">12 Jam</button>
-                <button class="btn" onclick="setPeriod('6h')">6 Jam</button>
-            </div>
             <canvas id="sensorChart" width="400" height="200"></canvas>
         </div>
     </div>
@@ -204,10 +191,10 @@
     <script>
         // Data nodes
         const nodes = [
-            { id: 1, name: 'Area A', location: 'Zona Industri', co2: 425, h2s: 2.5, rssi: -63, battery: 78 },
-            { id: 2, name: 'Area B', location: 'Zona Perumahan', co2: 383, h2s: 2.1, rssi: -68, battery: 85 },
-            { id: 3, name: 'Area C', location: 'Zona Komersial', co2: 452, h2s: 3.4, rssi: -64, battery: 72 },
-            { id: 4, name: 'Area D', location: 'Zona Hijau', co2: 389, h2s: 2.3, rssi: -72, battery: 90 }
+            { id: 1, name: 'Area A', location: 'Zona Utara', co2: 425, h2s: 2.5, rssi: -63, battery: 78 },
+            { id: 2, name: 'Area B', location: 'Zona Timur', co2: 383, h2s: 2.1, rssi: -68, battery: 85 },
+            { id: 3, name: 'Area C', location: 'Zona Barat', co2: 452, h2s: 3.4, rssi: -64, battery: 72 },
+            { id: 4, name: 'Area D', location: 'Zona Selatan', co2: 389, h2s: 2.3, rssi: -72, battery: 90 }
         ];
 
         let chart;
