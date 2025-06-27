@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Node Sensor Dashboard</title>
+    <title>Multi-Node Environmental Monitor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * {
@@ -17,6 +17,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
+            color: white;
         }
 
         .container {
@@ -35,7 +36,6 @@
         }
 
         .header h1 {
-            color: white;
             font-size: 2.5rem;
             margin-bottom: 10px;
             text-shadow: 0 2px 4px rgba(0,0,0,0.3);
@@ -46,150 +46,97 @@
             font-size: 1.1rem;
         }
 
-        .node-selector {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-        }
-
-        .node-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            position: relative;
-        }
-
-        .node-btn:hover, .node-btn.active {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-
-        .node-btn.active {
-            border-color: #4ecdc4;
-            background: rgba(78, 205, 196, 0.2);
-        }
-
-        .node-status {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            border: 2px solid white;
-        }
-
-        .status-online { background: #2ecc71; }
-        .status-offline { background: #e74c3c; }
-
-        .stats-grid {
+        .cards-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
 
-        .stat-card {
+        .node-card {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 25px;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
             position: relative;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
 
         .node-label {
             position: absolute;
-            top: 10px;
+            top: 15px;
             right: 15px;
-            background: rgba(78, 205, 196, 0.3);
-            color: white;
-            padding: 4px 8px;
+            background: rgba(46, 204, 113, 0.3);
+            padding: 5px 10px;
             border-radius: 10px;
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             font-weight: 600;
         }
 
-        .stat-header {
+        .node-header {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
 
-        .stat-icon {
+        .node-icon {
             width: 50px;
             height: 50px;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
             border-radius: 12px;
-            margin-right: 15px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
+            margin-right: 15px;
         }
 
-        .co2-icon { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
-        .h2s-icon { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
-        .rssi-icon { background: linear-gradient(135deg, #45b7d1, #2c3e50); }
-        .battery-icon { background: linear-gradient(135deg, #96ceb4, #ffecd2); }
-
-        .stat-title {
-            color: white;
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .stat-value {
-            color: white;
-            font-size: 2.2rem;
-            font-weight: bold;
+        .node-info h3 {
+            font-size: 1.3rem;
             margin-bottom: 5px;
         }
 
-        .stat-unit {
+        .node-info p {
             color: rgba(255, 255, 255, 0.7);
             font-size: 0.9rem;
         }
 
-        .stat-status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin-top: 10px;
+        .sensors-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
         }
 
-        .status-good { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
-        .status-warning { background: rgba(241, 196, 15, 0.2); color: #f1c40f; }
-        .status-danger { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+        .sensor-item {
+            text-align: center;
+        }
+
+        .sensor-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 5px;
+        }
+
+        .sensor-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .sensor-unit {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
 
         .chart-container {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 30px;
-            margin-bottom: 30px;
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .chart-title {
-            color: white;
             font-size: 1.4rem;
             font-weight: 600;
             margin-bottom: 20px;
@@ -200,7 +147,7 @@
             display: flex;
             justify-content: center;
             gap: 15px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             flex-wrap: wrap;
         }
 
@@ -208,188 +155,71 @@
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.3);
             color: white;
-            padding: 12px 24px;
-            border-radius: 25px;
+            padding: 10px 20px;
+            border-radius: 20px;
             cursor: pointer;
-            font-size: 1rem;
-            font-weight: 500;
+            font-size: 0.9rem;
             transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
         }
 
         .btn:hover, .btn.active {
             background: rgba(255, 255, 255, 0.2);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
 
-        .status-indicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            border-radius: 25px;
-            color: white;
-            font-weight: 600;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .online { background: rgba(46, 204, 113, 0.3); }
-        .offline { background: rgba(231, 76, 60, 0.3); }
-
-        .summary-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .summary-title {
-            color: white;
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            text-align: center;
-        }
-
-        .summary-item {
-            color: white;
-        }
-
-        .summary-label {
-            font-size: 0.9rem;
-            opacity: 0.8;
-            margin-bottom: 5px;
-        }
-
-        .summary-value {
-            font-size: 1.1rem;
-            font-weight: 600;
+        .btn.active {
+            background: rgba(78, 205, 196, 0.3);
+            border-color: #4ecdc4;
         }
 
         @media (max-width: 768px) {
             .header h1 { font-size: 2rem; }
-            .stats-grid { grid-template-columns: 1fr; }
-            .controls { flex-direction: column; align-items: center; }
-            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+            .cards-grid { grid-template-columns: 1fr; }
+            .sensors-grid { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="status-indicator online" id="connectionStatus">
-        🟢 Online - 4 Nodes Active
-    </div>
-
     <div class="container">
         <div class="header">
             <h1>🌱 Multi-Node Environmental Monitor</h1>
             <p>Real-time monitoring 4 node sensor dengan teknologi LoRa</p>
         </div>
 
-        <div class="summary-card">
-            <div class="summary-title">Network Status Overview</div>
-            <div class="summary-grid">
-                <div class="summary-item">
-                    <div class="summary-label">Total Nodes</div>
-                    <div class="summary-value" id="totalNodes">4</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Online</div>
-                    <div class="summary-value" id="onlineNodes">4</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Avg RSSI</div>
-                    <div class="summary-value" id="avgRssi">-65 dBm</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Last Update</div>
-                    <div class="summary-value" id="lastUpdate">Just now</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="node-selector">
-            <button class="node-btn active" onclick="selectNode('all')" data-node="all">
-                All Nodes
-                <div class="node-status status-online"></div>
-            </button>
-            <button class="node-btn" onclick="selectNode(1)" data-node="1">
-                Node 1 - Area A
-                <div class="node-status status-online"></div>
-            </button>
-            <button class="node-btn" onclick="selectNode(2)" data-node="2">
-                Node 2 - Area B
-                <div class="node-status status-online"></div>
-            </button>
-            <button class="node-btn" onclick="selectNode(3)" data-node="3">
-                Node 3 - Area C
-                <div class="node-status status-online"></div>
-            </button>
-            <button class="node-btn" onclick="selectNode(4)" data-node="4">
-                Node 4 - Area D
-                <div class="node-status status-online"></div>
-            </button>
-        </div>
-
-        <div class="stats-grid" id="statsGrid">
-            <!-- Dynamic content will be inserted here -->
-        </div>
-
-        <div class="controls">
-            <button class="btn active" onclick="showChart('24h')">24 Jam</button>
-            <button class="btn" onclick="showChart('12h')">12 Jam</button>
-            <button class="btn" onclick="showChart('6h')">6 Jam</button>
-            <button class="btn" onclick="refreshData()">Refresh</button>
+        <div class="cards-grid" id="cardsGrid">
+            <!-- Cards will be generated here -->
         </div>
 
         <div class="chart-container">
-            <div class="chart-title" id="chartTitle">Grafik Monitoring 24 Jam Terakhir - Semua Node</div>
+            <div class="chart-title">Grafik Monitoring 24 Jam Terakhir - Semua Node</div>
+            <div class="controls">
+                <button class="btn active" onclick="setPeriod('24h')">24 Jam</button>
+                <button class="btn" onclick="setPeriod('12h')">12 Jam</button>
+                <button class="btn" onclick="setPeriod('6h')">6 Jam</button>
+            </div>
             <canvas id="sensorChart" width="400" height="200"></canvas>
         </div>
     </div>
 
     <script>
-        // Global variables
+        // Data nodes
+        const nodes = [
+            { id: 1, name: 'Area A', location: 'Zona Industri', co2: 425, h2s: 2.5, rssi: -63, battery: 78 },
+            { id: 2, name: 'Area B', location: 'Zona Perumahan', co2: 383, h2s: 2.1, rssi: -68, battery: 85 },
+            { id: 3, name: 'Area C', location: 'Zona Komersial', co2: 452, h2s: 3.4, rssi: -64, battery: 72 },
+            { id: 4, name: 'Area D', location: 'Zona Hijau', co2: 389, h2s: 2.3, rssi: -72, battery: 90 }
+        ];
+
         let chart;
-        let selectedNode = 'all';
-        let selectedPeriod = '24h';
-        const ctx = document.getElementById('sensorChart').getContext('2d');
+        let currentPeriod = '24h';
 
-        // Node data structure
-        const nodes = {
-            1: { name: 'Area A', location: 'Zona Industri', online: true },
-            2: { name: 'Area B', location: 'Zona Perumahan', online: true },
-            3: { name: 'Area C', location: 'Zona Komersial', online: true },
-            4: { name: 'Area D', location: 'Zona Hijau', online: true }
-        };
-
-        // Current sensor data for each node
-        const currentData = {
-            1: { co2: 420, h2s: 2.5, rssi: -68, battery: 78 },
-            2: { co2: 385, h2s: 1.8, rssi: -72, battery: 85 },
-            3: { co2: 445, h2s: 3.2, rssi: -65, battery: 72 },
-            4: { co2: 395, h2s: 2.1, rssi: -70, battery: 90 }
-        };
-
-        // Historical data (24 hours)
-        const historicalData = {};
-
-        // Generate realistic 24-hour historical data
+        // Generate historical data
         function generateHistoricalData() {
+            const data = {};
             const now = new Date();
             
-            for (let nodeId = 1; nodeId <= 4; nodeId++) {
-                historicalData[nodeId] = {
+            nodes.forEach(node => {
+                data[node.id] = {
                     timestamps: [],
                     co2: [],
                     h2s: []
@@ -397,43 +227,108 @@
 
                 for (let i = 24; i >= 0; i--) {
                     const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
-                    historicalData[nodeId].timestamps.push(timestamp);
-
-                    // Generate realistic CO2 patterns (higher during day, lower at night)
-                    const hour = timestamp.getHours();
-                    let baseCO2 = 380;
-                    if (hour >= 6 && hour <= 18) {
-                        baseCO2 += 50 + Math.sin((hour - 6) * Math.PI / 12) * 40;
-                    }
+                    data[node.id].timestamps.push(timestamp);
                     
-                    // Add node-specific variations
-                    const nodeVariation = {
-                        1: 30,  // Industrial area - higher
-                        2: -20, // Residential - lower
-                        3: 20,  // Commercial - medium-high
-                        4: -30  // Green area - lowest
-                    };
+                    // Generate realistic data with variations
+                    const baseCO2 = node.co2 + (Math.random() - 0.5) * 50;
+                    const baseH2S = node.h2s + (Math.random() - 0.5) * 2;
                     
-                    baseCO2 += nodeVariation[nodeId];
-                    baseCO2 += (Math.random() - 0.5) * 40; // Random variation
-                    
-                    historicalData[nodeId].co2.push(Math.max(350, baseCO2));
-
-                    // Generate H2S data (generally lower, occasional spikes)
-                    let h2s = 1 + Math.random() * 2;
-                    if (Math.random() < 0.1) h2s += Math.random() * 5; // Occasional spikes
-                    historicalData[nodeId].h2s.push(h2s);
+                    data[node.id].co2.push(Math.max(300, baseCO2));
+                    data[node.id].h2s.push(Math.max(0.5, baseH2S));
                 }
-            }
+            });
+            
+            return data;
+        }
+
+        // Initialize cards
+        function initCards() {
+            const cardsGrid = document.getElementById('cardsGrid');
+            cardsGrid.innerHTML = '';
+
+            nodes.forEach(node => {
+                const card = document.createElement('div');
+                card.className = 'node-card';
+                card.innerHTML = `
+                    <div class="node-label">Node ${node.id}</div>
+                    <div class="node-header">
+                        <div class="node-icon">🏭</div>
+                        <div class="node-info">
+                            <h3>${node.name}</h3>
+                            <p>${node.location}</p>
+                        </div>
+                    </div>
+                    <div class="sensors-grid">
+                        <div class="sensor-item">
+                            <div class="sensor-label">CO₂</div>
+                            <div class="sensor-value">${node.co2}</div>
+                            <div class="sensor-unit">ppm</div>
+                        </div>
+                        <div class="sensor-item">
+                            <div class="sensor-label">H₂S</div>
+                            <div class="sensor-value">${node.h2s}</div>
+                            <div class="sensor-unit">ppm</div>
+                        </div>
+                        <div class="sensor-item">
+                            <div class="sensor-label">RSSI</div>
+                            <div class="sensor-value">${node.rssi}</div>
+                            <div class="sensor-unit">dBm</div>
+                        </div>
+                        <div class="sensor-item">
+                            <div class="sensor-label">Battery</div>
+                            <div class="sensor-value">${node.battery}</div>
+                            <div class="sensor-unit">%</div>
+                        </div>
+                    </div>
+                `;
+                cardsGrid.appendChild(card);
+            });
         }
 
         // Initialize chart
         function initChart() {
+            const ctx = document.getElementById('sensorChart').getContext('2d');
+            const historicalData = generateHistoricalData();
+            
+            // Prepare datasets
+            const datasets = [];
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
+            const h2sColors = ['#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
+
+            nodes.forEach((node, index) => {
+                datasets.push({
+                    label: `Node ${node.id} CO₂`,
+                    data: historicalData[node.id].co2,
+                    borderColor: colors[index],
+                    backgroundColor: colors[index] + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    yAxisID: 'y'
+                });
+
+                datasets.push({
+                    label: `Node ${node.id} H₂S`,
+                    data: historicalData[node.id].h2s,
+                    borderColor: h2sColors[index],
+                    backgroundColor: h2sColors[index] + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                });
+            });
+
+            // Generate labels (hours)
+            const labels = historicalData[1].timestamps.map(ts => {
+                return ts.getHours().toString().padStart(2, '0') + ':00';
+            });
+
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: [],
-                    datasets: []
+                    labels: labels,
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -443,7 +338,12 @@
                     },
                     plugins: {
                         legend: {
-                            labels: { color: 'white', font: { size: 12 } }
+                            labels: { 
+                                color: 'white', 
+                                font: { size: 11 },
+                                usePointStyle: true,
+                                padding: 15
+                            }
                         },
                         tooltip: {
                             backgroundColor: 'rgba(0,0,0,0.8)',
@@ -462,7 +362,9 @@
                             position: 'left',
                             title: { display: true, text: 'CO₂ (ppm)', color: 'white' },
                             ticks: { color: 'white' },
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            min: 300,
+                            max: 520
                         },
                         y1: {
                             type: 'linear',
@@ -470,393 +372,37 @@
                             position: 'right',
                             title: { display: true, text: 'H₂S (ppm)', color: 'white' },
                             ticks: { color: 'white' },
-                            grid: { drawOnChartArea: false }
+                            grid: { drawOnChartArea: false },
+                            min: 0,
+                            max: 6
                         }
                     }
                 }
             });
         }
 
-        // Update chart based on selected node and period
-        function updateChart() {
-            const datasets = [];
-            const labels = [];
-            
-            if (selectedNode === 'all') {
-                // Show all nodes
-                const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
-                const nodeColors = ['#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
-                
-                for (let nodeId = 1; nodeId <= 4; nodeId++) {
-                    const nodeData = getDataForPeriod(nodeId, selectedPeriod);
-                    
-                    datasets.push({
-                        label: `Node ${nodeId} CO₂`,
-                        data: nodeData.co2,
-                        borderColor: colors[nodeId - 1],
-                        backgroundColor: colors[nodeId - 1] + '20',
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.4,
-                        yAxisID: 'y'
-                    });
-                    
-                    datasets.push({
-                        label: `Node ${nodeId} H₂S`,
-                        data: nodeData.h2s,
-                        borderColor: nodeColors[nodeId - 1],
-                        backgroundColor: nodeColors[nodeId - 1] + '20',
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.4,
-                        yAxisID: 'y1'
-                    });
-                }
-                
-                if (historicalData[1]) {
-                    labels.push(...getLabelsForPeriod(selectedPeriod));
-                }
-            } else {
-                // Show single node
-                const nodeData = getDataForPeriod(selectedNode, selectedPeriod);
-                
-                datasets.push({
-                    label: 'CO₂ (ppm)',
-                    data: nodeData.co2,
-                    borderColor: '#ff6b6b',
-                    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    yAxisID: 'y'
-                });
-                
-                datasets.push({
-                    label: 'H₂S (ppm)',
-                    data: nodeData.h2s,
-                    borderColor: '#4ecdc4',
-                    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    yAxisID: 'y1'
-                });
-                
-                labels.push(...getLabelsForPeriod(selectedPeriod));
-            }
-            
-            chart.data.labels = labels;
-            chart.data.datasets = datasets;
-            chart.update();
-        }
-
-        // Get data for specific period
-        function getDataForPeriod(nodeId, period) {
-            if (!historicalData[nodeId]) return { co2: [], h2s: [] };
-            
-            const hoursBack = period === '24h' ? 24 : period === '12h' ? 12 : 6;
-            const startIndex = Math.max(0, historicalData[nodeId].co2.length - hoursBack - 1);
-            
-            return {
-                co2: historicalData[nodeId].co2.slice(startIndex),
-                h2s: historicalData[nodeId].h2s.slice(startIndex)
-            };
-        }
-
-        // Get labels for specific period
-        function getLabelsForPeriod(period) {
-            if (!historicalData[1]) return [];
-            
-            const hoursBack = period === '24h' ? 24 : period === '12h' ? 12 : 6;
-            const startIndex = Math.max(0, historicalData[1].timestamps.length - hoursBack - 1);
-            
-            return historicalData[1].timestamps.slice(startIndex).map(ts => {
-                return ts.getHours().toString().padStart(2, '0') + ':00';
-            });
-        }
-
-        // Update stats display
-        function updateStatsDisplay() {
-            const statsGrid = document.getElementById('statsGrid');
-            statsGrid.innerHTML = '';
-
-            if (selectedNode === 'all') {
-                // Show summary cards for all nodes
-                for (let nodeId = 1; nodeId <= 4; nodeId++) {
-                    const data = currentData[nodeId];
-                    const node = nodes[nodeId];
-                    
-                    statsGrid.innerHTML += `
-                        <div class="stat-card">
-                            <div class="node-label">Node ${nodeId}</div>
-                            <div class="stat-header">
-                                <div class="stat-icon co2-icon">🏭</div>
-                                <div>
-                                    <div class="stat-title">${node.name}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">${node.location}</div>
-                                </div>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-                                <div>
-                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">CO₂</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.co2}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">ppm</div>
-                                </div>
-                                <div>
-                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">H₂S</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.h2s}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">ppm</div>
-                                </div>
-                                <div>
-                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">RSSI</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.rssi}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">dBm</div>
-                                </div>
-                                <div>
-                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Battery</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.battery}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">%</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-            } else {
-                // Show detailed cards for selected node
-                const data = currentData[selectedNode];
-                const sensors = [
-                    { key: 'co2', title: 'Carbon Dioxide', unit: 'ppm', icon: '🏭', class: 'co2-icon' },
-                    { key: 'h2s', title: 'Hydrogen Sulfide', unit: 'ppm', icon: '☠️', class: 'h2s-icon' },
-                    { key: 'rssi', title: 'Signal Strength', unit: 'dBm', icon: '📶', class: 'rssi-icon' },
-                    { key: 'battery', title: 'Battery Level', unit: '%', icon: '🔋', class: 'battery-icon' }
-                ];
-
-                sensors.forEach(sensor => {
-                    const value = data[sensor.key];
-                    const status = getStatus(sensor.key, value);
-                    
-                    statsGrid.innerHTML += `
-                        <div class="stat-card">
-                            <div class="node-label">Node ${selectedNode}</div>
-                            <div class="stat-header">
-                                <div class="stat-icon ${sensor.class}">${sensor.icon}</div>
-                                <div class="stat-title">${sensor.title}</div>
-                            </div>
-                            <div class="stat-value">${value}</div>
-                            <div class="stat-unit">${sensor.unit}</div>
-                            <div class="stat-status ${status.class}">${status.text}</div>
-                        </div>
-                    `;
-                });
-            }
-        }
-
-        // Get status for sensor value
-        function getStatus(type, value) {
-            let statusClass, statusText;
-
-            switch (type) {
-                case 'co2':
-                    if (value < 400) {
-                        statusClass = 'status-good';
-                        statusText = 'Normal';
-                    } else if (value < 1000) {
-                        statusClass = 'status-warning';
-                        statusText = 'Warning';
-                    } else {
-                        statusClass = 'status-danger';
-                        statusText = 'Bahaya';
-                    }
-                    break;
-                case 'h2s':
-                    if (value < 10) {
-                        statusClass = 'status-good';
-                        statusText = 'Aman';
-                    } else if (value < 20) {
-                        statusClass = 'status-warning';
-                        statusText = 'Warning';
-                    } else {
-                        statusClass = 'status-danger';
-                        statusText = 'Bahaya';
-                    }
-                    break;
-                case 'rssi':
-                    if (value > -70) {
-                        statusClass = 'status-good';
-                        statusText = 'Kuat';
-                    } else if (value > -80) {
-                        statusClass = 'status-warning';
-                        statusText = 'Sedang';
-                    } else {
-                        statusClass = 'status-danger';
-                        statusText = 'Lemah';
-                    }
-                    break;
-                case 'battery':
-                    if (value > 50) {
-                        statusClass = 'status-good';
-                        statusText = 'Good';
-                    } else if (value > 20) {
-                        statusClass = 'status-warning';
-                        statusText = 'Low';
-                    } else {
-                        statusClass = 'status-danger';
-                        statusText = 'Critical';
-                    }
-                    break;
-            }
-
-            return { class: statusClass, text: statusText };
-        }
-
-        // Select node
-        function selectNode(nodeId) {
-            selectedNode = nodeId;
-            
-            // Update active button
-            document.querySelectorAll('.node-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`[data-node="${nodeId}"]`).classList.add('active');
-            
-            // Update chart title
-            const title = nodeId === 'all' ? 
-                `Grafik Monitoring ${selectedPeriod.toUpperCase()} Terakhir - Semua Node` :
-                `Grafik Monitoring ${selectedPeriod.toUpperCase()} Terakhir - Node ${nodeId} (${nodes[nodeId].name})`;
-            document.getElementById('chartTitle').textContent = title;
-            
-            updateStatsDisplay();
-            updateChart();
-        }
-
-        // Show chart period
-        function showChart(period) {
-            selectedPeriod = period;
+        // Set period
+        function setPeriod(period) {
+            currentPeriod = period;
             
             // Update active button
             document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             
-            // Update chart title
-            const title = selectedNode === 'all' ? 
-                `Grafik Monitoring ${period.toUpperCase()} Terakhir - Semua Node` :
-                `Grafik Monitoring ${period.toUpperCase()} Terakhir - Node ${selectedNode} (${nodes[selectedNode].name})`;
-            document.getElementById('chartTitle').textContent = title;
-            
-            updateChart();
-        }
-
-        // Refresh data
-        function refreshData() {
-            // Simulate data refresh
-            document.getElementById('connectionStatus').className = 'status-indicator offline';
-            document.getElementById('connectionStatus').innerHTML = '🟡 Refreshing...';
-            
-            setTimeout(() => {
-                // Update current data with new values
-                for (let nodeId = 1; nodeId <= 4; nodeId++) {
-                    currentData[nodeId].co2 = Math.round(Math.random() * 100 + 350);
-                    currentData[nodeId].h2s = parseFloat((Math.random() * 5 + 1).toFixed(1));
-                    currentData[nodeId].rssi = Math.round(Math.random() * 30 - 90);
-                    currentData[nodeId].battery = Math.round(Math.random() * 30 + 70);
-                }
-
-                // Add new data point to historical data
-                const now = new Date();
-                for (let nodeId = 1; nodeId <= 4; nodeId++) {
-                    historicalData[nodeId].timestamps.push(now);
-                    historicalData[nodeId].co2.push(currentData[nodeId].co2);
-                    historicalData[nodeId].h2s.push(currentData[nodeId].h2s);
-                    
-                    // Keep only last 25 hours of data
-                    if (historicalData[nodeId].timestamps.length > 25) {
-                        historicalData[nodeId].timestamps.shift();
-                        historicalData[nodeId].co2.shift();
-                        historicalData[nodeId].h2s.shift();
-                    }
-                }
-
-                // Update summary stats
-                const avgRssi = Math.round(Object.values(currentData).reduce((sum, node) => sum + node.rssi, 0) / 4);
-                document.getElementById('avgRssi').textContent = avgRssi + ' dBm';
-                document.getElementById('lastUpdate').textContent = 'Just now';
-                
-                document.getElementById('connectionStatus').className = 'status-indicator online';
-                document.getElementById('connectionStatus').innerHTML = '🟢 Online - 4 Nodes Active';
-                
-                updateStatsDisplay();
-                updateChart();
-            }, 1500);
-        }
-
-        // Simulate real-time updates
-        function simulateRealTimeUpdates() {
-            // Update data every 30 seconds
-            setInterval(() => {
-                const now = new Date();
-                
-                for (let nodeId = 1; nodeId <= 4; nodeId++) {
-                    // Small variations in current data
-                    currentData[nodeId].co2 += Math.round((Math.random() - 0.5) * 20);
-                    currentData[nodeId].h2s += parseFloat(((Math.random() - 0.5) * 1).toFixed(1));
-                    currentData[nodeId].rssi += Math.round((Math.random() - 0.5) * 10);
-                    currentData[nodeId].battery = Math.max(0, currentData[nodeId].battery - Math.random() * 0.5);
-
-                    // Ensure realistic bounds
-                    currentData[nodeId].co2 = Math.max(350, Math.min(600, currentData[nodeId].co2));
-                    currentData[nodeId].h2s = Math.max(0.5, Math.min(15, currentData[nodeId].h2s));
-                    currentData[nodeId].rssi = Math.max(-100, Math.min(-50, currentData[nodeId].rssi));
-                    currentData[nodeId].battery = Math.max(0, Math.min(100, currentData[nodeId].battery));
-
-                    // Add to historical data
-                    historicalData[nodeId].timestamps.push(now);
-                    historicalData[nodeId].co2.push(currentData[nodeId].co2);
-                    historicalData[nodeId].h2s.push(currentData[nodeId].h2s);
-                    
-                    // Keep only last 25 hours
-                    if (historicalData[nodeId].timestamps.length > 25) {
-                        historicalData[nodeId].timestamps.shift();
-                        historicalData[nodeId].co2.shift();
-                        historicalData[nodeId].h2s.shift();
-                    }
-                }
-
-                // Update display
-                updateStatsDisplay();
-                updateChart();
-                
-                // Update summary
-                const avgRssi = Math.round(Object.values(currentData).reduce((sum, node) => sum + node.rssi, 0) / 4);
-                document.getElementById('avgRssi').textContent = avgRssi + ' dBm';
-                document.getElementById('lastUpdate').textContent = 'Just now';
-            }, 30000); // Every 30 seconds
+            // Update chart (in a real app, you'd filter the data based on period)
+            // For simplicity, we'll just update the title
+            const title = `Grafik Monitoring ${period.toUpperCase()} Terakhir - Semua Node`;
+            document.querySelector('.chart-title').textContent = title;
         }
 
         // Initialize dashboard
         function init() {
-            generateHistoricalData();
+            initCards();
             initChart();
-            updateStatsDisplay();
-            updateChart();
-            simulateRealTimeUpdates();
         }
 
-        // Start dashboard when page loads
+        // Start when page loads
         window.addEventListener('load', init);
-
-        // Add interactive effects
-        document.addEventListener('DOMContentLoaded', function() {
-            // Add hover effects to stat cards
-            setTimeout(() => {
-                document.querySelectorAll('.stat-card').forEach(card => {
-                    card.addEventListener('mouseenter', function() {
-                        this.style.transform = 'translateY(-8px) scale(1.02)';
-                    });
-                    
-                    card.addEventListener('mouseleave', function() {
-                        this.style.transform = 'translateY(0) scale(1)';
-                    });
-                });
-            }, 100);
-        });
     </script>
 </body>
 </html>
