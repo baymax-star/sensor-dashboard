@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multi-Node Sensor Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -293,8 +292,8 @@
 
     <div class="container">
         <div class="header">
-            <h1>Dashboard Monitoring</h1>
-            <p>Real-time monitoring 4 node sensor</p>
+            <h1>🌱 Multi-Node Environmental Monitor</h1>
+            <p>Real-time monitoring 4 node sensor dengan teknologi LoRa</p>
         </div>
 
         <div class="summary-card">
@@ -349,7 +348,7 @@
         <div class="controls">
             <button class="btn active" onclick="showChart('24h')">24 Jam</button>
             <button class="btn" onclick="showChart('12h')">12 Jam</button>
-            <button class="btn" onclick="showChart('6h')">6 Jam</button>      
+            <button class="btn" onclick="showChart('6h')">6 Jam</button>
             <button class="btn" onclick="refreshData()">Refresh</button>
         </div>
 
@@ -360,11 +359,7 @@
     </div>
 
     <script>
-// Global variables
-        const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co'; // Ganti dengan Project URL Anda
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk'; // Ganti dengan Anon Public Key Anda
-        const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+        // Global variables
         let chart;
         let selectedNode = 'all';
         let selectedPeriod = '24h';
@@ -372,161 +367,65 @@
 
         // Node data structure
         const nodes = {
-            1: { name: 'Area A', location: 'Zona Timur', online: true },
-            2: { name: 'Area B', location: 'Zona Utara', online: true },
-            3: { name: 'Area C', location: 'Zona Barat', online: true },
-            4: { name: 'Area D', location: 'Zona Selatan', online: true }
+            1: { name: 'Area A', location: 'Zona Industri', online: true },
+            2: { name: 'Area B', location: 'Zona Perumahan', online: true },
+            3: { name: 'Area C', location: 'Zona Komersial', online: true },
+            4: { name: 'Area D', location: 'Zona Hijau', online: true }
         };
- const DEVICE_IDS = Object.keys(nodes); // Array of device_id strings
 
-        // Current sensor data for each node, akan diisi dari Supabase
+        // Current sensor data for each node
         const currentData = {
-            'node-1': {},
-            'node-2': {},
-            'node-3': {},
-            'node-4': {}
+            1: { co2: 420, h2s: 2.5, rssi: -68, battery: 78 },
+            2: { co2: 385, h2s: 1.8, rssi: -72, battery: 85 },
+            3: { co2: 445, h2s: 3.2, rssi: -65, battery: 72 },
+            4: { co2: 395, h2s: 2.1, rssi: -70, battery: 90 }
         };
 
-        // Historical data (24 hours) for chart
+        // Historical data (24 hours)
         const historicalData = {};
 
-        // Fungsi untuk mengambil data terkini dari Supabase
-        async function fetchCurrentData() {
-            const { data, error } = await supabase
-                .from('sensor_dashboard') // Nama tabel Anda
-                .select('device_id, co2_ppm, h2s_ppm, gateway_rssi, voltage, current, power, created_at')
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error('Error fetching current data:', error);
-                document.getElementById('connectionStatus').className = 'status-indicator offline';
-                document.getElementById('connectionStatus').innerHTML = '🔴 Offline - Error fetching data';
-                return;
-            }
-
-            // Group latest data by device_id
-            const latestDataByNode = {};
-            const activeNodes = new Set();
-            data.forEach(row => {
-                if (!latestDataByNode[row.device_id]) {
-                    latestDataByNode[row.device_id] = row;
-                    activeNodes.add(row.device_id);
-                }
-            });
-
-            // Update currentData and node online status
-            let onlineNodeCount = 0;
-            let totalRssi = 0;
-            let lastUpdateTimestamp = 0;
-
-            for (const deviceId of DEVICE_IDS) {
-                if (latestDataByNode[deviceId]) {
-                    currentData[deviceId] = {
-                        co2: latestDataByNode[deviceId].co2_ppm,
-                        h2s: latestDataByNode[deviceId].h2s_ppm,
-                        rssi: latestDataByNode[deviceId].gateway_rssi,
-                        voltage: latestDataByNode[deviceId].voltage,
-                        current: latestDataByNode[deviceId].current,
-                        power: latestDataByNode[deviceId].power,
-                        battery: calculateBatteryPercentage(latestDataByNode[deviceId].voltage), // Hitung % baterai dari voltage
-                        last_seen: new Date(latestDataByNode[deviceId].created_at)
-                    };
-                    nodes[deviceId].online = true;
-                    onlineNodeCount++;
-                    totalRssi += latestDataByByNode[deviceId].gateway_rssi;
-                    if (latestDataByNode[deviceId].last_seen.getTime() > lastUpdateTimestamp) {
-                        lastUpdateTimestamp = latestDataByNode[deviceId].last_seen.getTime();
-                    }
-                } else {
-                    nodes[deviceId].online = false;
-                    // Optionally clear or set default for currentData[deviceId] if offline
-                    currentData[deviceId] = { co2: null, h2s: null, rssi: null, voltage: null, current: null, power: null, battery: null, last_seen: null };
-                }
-            }
-
-            // Update summary status
-            document.getElementById('onlineNodes').textContent = onlineNodeCount;
-            document.getElementById('totalNodes').textContent = DEVICE_IDS.length;
-            document.getElementById('avgRssi').textContent = onlineNodeCount > 0 ? `${Math.round(totalRssi / onlineNodeCount)} dBm` : 'N/A';
-            document.getElementById('lastUpdate').textContent = lastUpdateTimestamp ? formatRelativeTime(new Date(lastUpdateTimestamp)) : 'N/A';
-
-            document.getElementById('connectionStatus').className = `status-indicator ${onlineNodeCount > 0 ? 'online' : 'offline'}`;
-            document.getElementById('connectionStatus').innerHTML = `${onlineNodeCount > 0 ? '🟢 Online' : '🔴 Offline'} - ${onlineNodeCount} Nodes Active`;
-
-            // Update node button statuses
-            DEVICE_IDS.forEach(id => {
-                const button = document.querySelector(`.node-btn[data-node="${id}"] .node-status`);
-                if (button) {
-                    button.classList.remove('status-online', 'status-offline');
-                    button.classList.add(nodes[id].online ? 'status-online' : 'status-offline');
-                }
-            });
-
-            updateStatsDisplay();
-        }
-
-        // Fungsi untuk mengambil data historis dari Supabase
-        async function fetchHistoricalData() {
+        // Generate realistic 24-hour historical data
+        function generateHistoricalData() {
             const now = new Date();
-            const hoursBack = 25; // Fetch enough data for 24h chart
-            const startTime = new Date(now.getTime() - hoursBack * 60 * 60 * 1000).toISOString();
-
-            const { data, error } = await supabase
-                .from('sensor_dashboard')
-                .select('device_id, co2_ppm, h2s_ppm, created_at')
-                .gte('created_at', startTime)
-                .order('created_at', { ascending: true });
-
-            if (error) {
-                console.error('Error fetching historical data:', error);
-                return;
-            }
-
-            // Reset historical data
-            for (const deviceId of DEVICE_IDS) {
-                historicalData[deviceId] = {
+            
+            for (let nodeId = 1; nodeId <= 4; nodeId++) {
+                historicalData[nodeId] = {
                     timestamps: [],
                     co2: [],
                     h2s: []
                 };
-            }
 
-            // Populate historicalData
-            data.forEach(row => {
-                const deviceId = row.device_id;
-                if (historicalData[deviceId]) {
-                    historicalData[deviceId].timestamps.push(new Date(row.created_at));
-                    historicalData[deviceId].co2.push(row.co2_ppm);
-                    historicalData[deviceId].h2s.push(row.h2s_ppm);
+                for (let i = 24; i >= 0; i--) {
+                    const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
+                    historicalData[nodeId].timestamps.push(timestamp);
+
+                    // Generate realistic CO2 patterns (higher during day, lower at night)
+                    const hour = timestamp.getHours();
+                    let baseCO2 = 380;
+                    if (hour >= 6 && hour <= 18) {
+                        baseCO2 += 50 + Math.sin((hour - 6) * Math.PI / 12) * 40;
+                    }
+                    
+                    // Add node-specific variations
+                    const nodeVariation = {
+                        1: 30,  // Industrial area - higher
+                        2: -20, // Residential - lower
+                        3: 20,  // Commercial - medium-high
+                        4: -30  // Green area - lowest
+                    };
+                    
+                    baseCO2 += nodeVariation[nodeId];
+                    baseCO2 += (Math.random() - 0.5) * 40; // Random variation
+                    
+                    historicalData[nodeId].co2.push(Math.max(350, baseCO2));
+
+                    // Generate H2S data (generally lower, occasional spikes)
+                    let h2s = 1 + Math.random() * 2;
+                    if (Math.random() < 0.1) h2s += Math.random() * 5; // Occasional spikes
+                    historicalData[nodeId].h2s.push(h2s);
                 }
-            });
-
-            updateChart();
+            }
         }
-
-        // Calculate battery percentage from voltage (adjust this logic based on your sensor's battery characteristics)
-        function calculateBatteryPercentage(voltage) {
-            if (voltage === null || voltage === undefined) return null;
-            // Example for a 3.7V LiPo battery, adjust min/max voltage as needed
-            const MIN_VOLTAGE = 3.0; // Minimum voltage (e.g., empty)
-            const MAX_VOLTAGE = 4.2; // Maximum voltage (e.g., full)
-
-            let percentage = ((voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE)) * 100;
-            return Math.max(0, Math.min(100, Math.round(percentage)));
-        }
-
-        // Helper to format relative time
-        function formatRelativeTime(date) {
-            const now = new Date();
-            const diffSeconds = Math.round((now - date) / 1000);
-            if (diffSeconds < 60) return 'Just now';
-            const diffMinutes = Math.round(diffSeconds / 60);
-            if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
-            const diffHours = Math.round(diffMinutes / 60);
-            if (diffHours < 24) return `${diffHours} hours ago`;
-            return date.toLocaleDateString(); // Fallback for older data
-        }
-
 
         // Initialize chart
         function initChart() {
@@ -585,68 +484,63 @@
             
             if (selectedNode === 'all') {
                 // Show all nodes
-                const colorsCO2 = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
-                const colorsH2S = ['#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
+                const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
+                const nodeColors = ['#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
                 
-                DEVICE_IDS.forEach((deviceId, index) => {
-                    const nodeData = getDataForPeriod(deviceId, selectedPeriod);
+                for (let nodeId = 1; nodeId <= 4; nodeId++) {
+                    const nodeData = getDataForPeriod(nodeId, selectedPeriod);
                     
-                    if (nodeData.timestamps.length > 0) {
-                        datasets.push({
-                            label: `${nodes[deviceId].name} CO₂`,
-                            data: nodeData.co2,
-                            borderColor: colorsCO2[index % colorsCO2.length],
-                            backgroundColor: colorsCO2[index % colorsCO2.length] + '20',
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0.4,
-                            yAxisID: 'y'
-                        });
-                        
-                        datasets.push({
-                            label: `${nodes[deviceId].name} H₂S`,
-                            data: nodeData.h2s,
-                            borderColor: colorsH2S[index % colorsH2S.length],
-                            backgroundColor: colorsH2S[index % colorsH2S.length] + '20',
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0.4,
-                            yAxisID: 'y1'
-                        });
-                    }
-                });
+                    datasets.push({
+                        label: `Node ${nodeId} CO₂`,
+                        data: nodeData.co2,
+                        borderColor: colors[nodeId - 1],
+                        backgroundColor: colors[nodeId - 1] + '20',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    });
+                    
+                    datasets.push({
+                        label: `Node ${nodeId} H₂S`,
+                        data: nodeData.h2s,
+                        borderColor: nodeColors[nodeId - 1],
+                        backgroundColor: nodeColors[nodeId - 1] + '20',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    });
+                }
                 
-                // Use labels from the first available node (assuming timestamps are roughly aligned)
-                if (historicalData[DEVICE_IDS[0]]) {
+                if (historicalData[1]) {
                     labels.push(...getLabelsForPeriod(selectedPeriod));
                 }
             } else {
                 // Show single node
                 const nodeData = getDataForPeriod(selectedNode, selectedPeriod);
                 
-                if (nodeData.timestamps.length > 0) {
-                    datasets.push({
-                        label: 'CO₂ (ppm)',
-                        data: nodeData.co2,
-                        borderColor: '#ff6b6b',
-                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        yAxisID: 'y'
-                    });
-                    
-                    datasets.push({
-                        label: 'H₂S (ppm)',
-                        data: nodeData.h2s,
-                        borderColor: '#4ecdc4',
-                        backgroundColor: 'rgba(78, 205, 196, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        yAxisID: 'y1'
-                    });
-                }
+                datasets.push({
+                    label: 'CO₂ (ppm)',
+                    data: nodeData.co2,
+                    borderColor: '#ff6b6b',
+                    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    yAxisID: 'y'
+                });
+                
+                datasets.push({
+                    label: 'H₂S (ppm)',
+                    data: nodeData.h2s,
+                    borderColor: '#4ecdc4',
+                    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                });
                 
                 labels.push(...getLabelsForPeriod(selectedPeriod));
             }
@@ -657,41 +551,26 @@
         }
 
         // Get data for specific period
-        function getDataForPeriod(deviceId, period) {
-            if (!historicalData[deviceId]) return { timestamps: [], co2: [], h2s: [] };
+        function getDataForPeriod(nodeId, period) {
+            if (!historicalData[nodeId]) return { co2: [], h2s: [] };
             
             const hoursBack = period === '24h' ? 24 : period === '12h' ? 12 : 6;
+            const startIndex = Math.max(0, historicalData[nodeId].co2.length - hoursBack - 1);
             
-            const now = new Date();
-            const cutoffTime = now.getTime() - hoursBack * 60 * 60 * 1000;
-
-            const filteredTimestamps = [];
-            const filteredCo2 = [];
-            const filteredH2s = [];
-
-            for (let i = 0; i < historicalData[deviceId].timestamps.length; i++) {
-                if (historicalData[deviceId].timestamps[i].getTime() >= cutoffTime) {
-                    filteredTimestamps.push(historicalData[deviceId].timestamps[i]);
-                    filteredCo2.push(historicalData[deviceId].co2[i]);
-                    filteredH2s.push(historicalData[deviceId].h2s[i]);
-                }
-            }
-
             return {
-                timestamps: filteredTimestamps,
-                co2: filteredCo2,
-                h2s: filteredH2s
+                co2: historicalData[nodeId].co2.slice(startIndex),
+                h2s: historicalData[nodeId].h2s.slice(startIndex)
             };
         }
 
         // Get labels for specific period
         function getLabelsForPeriod(period) {
-            const firstNodeId = DEVICE_IDS[0];
-            if (!historicalData[firstNodeId] || historicalData[firstNodeId].timestamps.length === 0) return [];
+            if (!historicalData[1]) return [];
             
-            const dataForLabels = getDataForPeriod(firstNodeId, period);
+            const hoursBack = period === '24h' ? 24 : period === '12h' ? 12 : 6;
+            const startIndex = Math.max(0, historicalData[1].timestamps.length - hoursBack - 1);
             
-            return dataForLabels.timestamps.map(ts => {
+            return historicalData[1].timestamps.slice(startIndex).map(ts => {
                 return ts.getHours().toString().padStart(2, '0') + ':00';
             });
         }
@@ -703,102 +582,62 @@
 
             if (selectedNode === 'all') {
                 // Show summary cards for all nodes
-                DEVICE_IDS.forEach(deviceId => {
-                    const data = currentData[deviceId];
-                    const node = nodes[deviceId];
+                for (let nodeId = 1; nodeId <= 4; nodeId++) {
+                    const data = currentData[nodeId];
+                    const node = nodes[nodeId];
                     
-                    // Display N/A if data is not available (e.g., node offline or no data yet)
-                    const co2Val = data.co2 !== null ? data.co2 : 'N/A';
-                    const h2sVal = data.h2s !== null ? data.h2s : 'N/A';
-                    const rssiVal = data.rssi !== null ? data.rssi : 'N/A';
-                    const batteryVal = data.battery !== null ? data.battery : 'N/A';
-                    const voltageVal = data.voltage !== null ? data.voltage : 'N/A';
-                    const currentVal = data.current !== null ? data.current : 'N/A';
-                    const powerVal = data.power !== null ? data.power : 'N/A';
-
-
                     statsGrid.innerHTML += `
                         <div class="stat-card">
-                            <div class="node-label">${node.name}</div>
+                            <div class="node-label">Node ${nodeId}</div>
                             <div class="stat-header">
                                 <div class="stat-icon co2-icon">🏭</div>
                                 <div>
-                                    <div class="stat-title">Node ${node.numericId}</div>
+                                    <div class="stat-title">${node.name}</div>
                                     <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">${node.location}</div>
                                 </div>
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
                                 <div>
                                     <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">CO₂</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${co2Val}</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.co2}</div>
                                     <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">ppm</div>
                                 </div>
                                 <div>
                                     <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">H₂S</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${h2sVal}</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.h2s}</div>
                                     <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">ppm</div>
                                 </div>
                                 <div>
                                     <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">RSSI</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${rssiVal}</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.rssi}</div>
                                     <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">dBm</div>
                                 </div>
                                 <div>
                                     <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Battery</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${batteryVal}</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${data.battery}</div>
                                     <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">%</div>
-                                </div>
-                                <div>
-                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Voltage</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${voltageVal}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">V</div>
-                                </div>
-                                <div>
-                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Current</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${currentVal}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">A</div>
-                                </div>
-                                <div>
-                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Power</div>
-                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${powerVal}</div>
-                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">W</div>
                                 </div>
                             </div>
                         </div>
                     `;
-                });
+                }
             } else {
                 // Show detailed cards for selected node
                 const data = currentData[selectedNode];
-                const node = nodes[selectedNode];
-
-                // Check if data is available for the selected node
-                if (!data || Object.keys(data).length === 0 || data.co2 === null) {
-                    statsGrid.innerHTML = `
-                        <div class="stat-card" style="grid-column: 1 / -1; text-align: center; color: rgba(255,255,255,0.7);">
-                            Tidak ada data untuk Node ${node.numericId} (${node.name}) atau node sedang offline.
-                        </div>
-                    `;
-                    return;
-                }
-
                 const sensors = [
-                    { key: 'co2', title: 'Carbon Dioxide', unit: 'ppm', icon: '🏭', class: 'co2-icon', value: data.co2 },
-                    { key: 'h2s', title: 'Hydrogen Sulfide', unit: 'ppm', icon: '☠️', class: 'h2s-icon', value: data.h2s },
-                    { key: 'rssi', title: 'Signal Strength', unit: 'dBm', icon: '📶', class: 'rssi-icon', value: data.rssi },
-                    { key: 'battery', title: 'Battery Level', unit: '%', icon: '🔋', class: 'battery-icon', value: data.battery },
-                    { key: 'voltage', title: 'Voltage', unit: 'V', icon: '⚡', class: 'voltage-icon', value: data.voltage },
-                    { key: 'current', title: 'Current', unit: 'A', icon: '🔌', class: 'current-icon', value: data.current },
-                    { key: 'power', title: 'Power', unit: 'W', icon: '💡', class: 'power-icon', value: data.power }
+                    { key: 'co2', title: 'Carbon Dioxide', unit: 'ppm', icon: '🏭', class: 'co2-icon' },
+                    { key: 'h2s', title: 'Hydrogen Sulfide', unit: 'ppm', icon: '☠️', class: 'h2s-icon' },
+                    { key: 'rssi', title: 'Signal Strength', unit: 'dBm', icon: '📶', class: 'rssi-icon' },
+                    { key: 'battery', title: 'Battery Level', unit: '%', icon: '🔋', class: 'battery-icon' }
                 ];
 
                 sensors.forEach(sensor => {
-                    const value = sensor.value !== null ? sensor.value : 'N/A';
-                    const status = getStatus(sensor.key, sensor.value);
+                    const value = data[sensor.key];
+                    const status = getStatus(sensor.key, value);
                     
                     statsGrid.innerHTML += `
                         <div class="stat-card">
-                            <div class="node-label">${node.name}</div>
+                            <div class="node-label">Node ${selectedNode}</div>
                             <div class="stat-header">
                                 <div class="stat-icon ${sensor.class}">${sensor.icon}</div>
                                 <div class="stat-title">${sensor.title}</div>
@@ -815,10 +654,6 @@
         // Get status for sensor value
         function getStatus(type, value) {
             let statusClass, statusText;
-
-            if (value === null || value === undefined) {
-                return { class: 'status-warning', text: 'No Data' };
-            }
 
             switch (type) {
                 case 'co2':
@@ -869,42 +704,6 @@
                         statusText = 'Critical';
                     }
                     break;
-                case 'voltage':
-                    if (value > 3.7) { // Example threshold, adjust as needed
-                        statusClass = 'status-good';
-                        statusText = 'Optimal';
-                    } else if (value > 3.3) {
-                        statusClass = 'status-warning';
-                        statusText = 'Normal';
-                    } else {
-                        statusClass = 'status-danger';
-                        statusText = 'Low';
-                    }
-                    break;
-                case 'current': // Example thresholds for current
-                    if (value < 0.1) { // Very low current, potentially idle
-                        statusClass = 'status-good';
-                        statusText = 'Idle';
-                    } else if (value < 0.5) { // Moderate current
-                        statusClass = 'status-warning';
-                        statusText = 'Active';
-                    } else { // High current, potentially anomaly
-                        statusClass = 'status-danger';
-                        statusText = 'High';
-                    }
-                    break;
-                case 'power': // Example thresholds for power
-                    if (value < 0.5) {
-                        statusClass = 'status-good';
-                        statusText = 'Low Usage';
-                    } else if (value < 2.0) {
-                        statusClass = 'status-warning';
-                        statusText = 'Moderate Usage';
-                    } else {
-                        statusClass = 'status-danger';
-                        statusText = 'High Usage';
-                    }
-                    break;
             }
 
             return { class: statusClass, text: statusText };
@@ -921,7 +720,7 @@
             // Update chart title
             const title = nodeId === 'all' ? 
                 `Grafik Monitoring ${selectedPeriod.toUpperCase()} Terakhir - Semua Node` :
-                `Grafik Monitoring ${selectedPeriod.toUpperCase()} Terakhir - Node ${nodes[nodeId].numericId} (${nodes[nodeId].name})`;
+                `Grafik Monitoring ${selectedPeriod.toUpperCase()} Terakhir - Node ${nodeId} (${nodes[nodeId].name})`;
             document.getElementById('chartTitle').textContent = title;
             
             updateStatsDisplay();
@@ -934,46 +733,109 @@
             
             // Update active button
             document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
-            // Use event.currentTarget for reliability inside event handler
-            const targetButton = event.currentTarget || document.querySelector(`.btn.active`); 
-            if (targetButton) {
-                targetButton.classList.remove('active');
-            }
-            document.querySelector(`.btn[onclick="showChart('${period}')"]`).classList.add('active');
+            event.target.classList.add('active');
             
             // Update chart title
             const title = selectedNode === 'all' ? 
                 `Grafik Monitoring ${period.toUpperCase()} Terakhir - Semua Node` :
-                `Grafik Monitoring ${period.toUpperCase()} Terakhir - Node ${nodes[selectedNode].numericId} (${nodes[selectedNode].name})`;
+                `Grafik Monitoring ${period.toUpperCase()} Terakhir - Node ${selectedNode} (${nodes[selectedNode].name})`;
             document.getElementById('chartTitle').textContent = title;
             
             updateChart();
         }
 
         // Refresh data
-        async function refreshData() {
+        function refreshData() {
+            // Simulate data refresh
             document.getElementById('connectionStatus').className = 'status-indicator offline';
             document.getElementById('connectionStatus').innerHTML = '🟡 Refreshing...';
             
-            await fetchCurrentData();
-            await fetchHistoricalData();
+            setTimeout(() => {
+                // Update current data with new values
+                for (let nodeId = 1; nodeId <= 4; nodeId++) {
+                    currentData[nodeId].co2 = Math.round(Math.random() * 100 + 350);
+                    currentData[nodeId].h2s = parseFloat((Math.random() * 5 + 1).toFixed(1));
+                    currentData[nodeId].rssi = Math.round(Math.random() * 30 - 90);
+                    currentData[nodeId].battery = Math.round(Math.random() * 30 + 70);
+                }
 
-            // Status indicator and summary are updated by fetchCurrentData now
+                // Add new data point to historical data
+                const now = new Date();
+                for (let nodeId = 1; nodeId <= 4; nodeId++) {
+                    historicalData[nodeId].timestamps.push(now);
+                    historicalData[nodeId].co2.push(currentData[nodeId].co2);
+                    historicalData[nodeId].h2s.push(currentData[nodeId].h2s);
+                    
+                    // Keep only last 25 hours of data
+                    if (historicalData[nodeId].timestamps.length > 25) {
+                        historicalData[nodeId].timestamps.shift();
+                        historicalData[nodeId].co2.shift();
+                        historicalData[nodeId].h2s.shift();
+                    }
+                }
+
+                // Update summary stats
+                const avgRssi = Math.round(Object.values(currentData).reduce((sum, node) => sum + node.rssi, 0) / 4);
+                document.getElementById('avgRssi').textContent = avgRssi + ' dBm';
+                document.getElementById('lastUpdate').textContent = 'Just now';
+                
+                document.getElementById('connectionStatus').className = 'status-indicator online';
+                document.getElementById('connectionStatus').innerHTML = '🟢 Online - 4 Nodes Active';
+                
+                updateStatsDisplay();
+                updateChart();
+            }, 1500);
         }
 
-        // Simulate real-time updates by polling Supabase
+        // Simulate real-time updates
         function simulateRealTimeUpdates() {
-            setInterval(async () => {
-                await fetchCurrentData();
-                await fetchHistoricalData(); // Call this less frequently if data volume is very high, or optimize to fetch only new points
+            // Update data every 30 seconds
+            setInterval(() => {
+                const now = new Date();
+                
+                for (let nodeId = 1; nodeId <= 4; nodeId++) {
+                    // Small variations in current data
+                    currentData[nodeId].co2 += Math.round((Math.random() - 0.5) * 20);
+                    currentData[nodeId].h2s += parseFloat(((Math.random() - 0.5) * 1).toFixed(1));
+                    currentData[nodeId].rssi += Math.round((Math.random() - 0.5) * 10);
+                    currentData[nodeId].battery = Math.max(0, currentData[nodeId].battery - Math.random() * 0.5);
+
+                    // Ensure realistic bounds
+                    currentData[nodeId].co2 = Math.max(350, Math.min(600, currentData[nodeId].co2));
+                    currentData[nodeId].h2s = Math.max(0.5, Math.min(15, currentData[nodeId].h2s));
+                    currentData[nodeId].rssi = Math.max(-100, Math.min(-50, currentData[nodeId].rssi));
+                    currentData[nodeId].battery = Math.max(0, Math.min(100, currentData[nodeId].battery));
+
+                    // Add to historical data
+                    historicalData[nodeId].timestamps.push(now);
+                    historicalData[nodeId].co2.push(currentData[nodeId].co2);
+                    historicalData[nodeId].h2s.push(currentData[nodeId].h2s);
+                    
+                    // Keep only last 25 hours
+                    if (historicalData[nodeId].timestamps.length > 25) {
+                        historicalData[nodeId].timestamps.shift();
+                        historicalData[nodeId].co2.shift();
+                        historicalData[nodeId].h2s.shift();
+                    }
+                }
+
+                // Update display
+                updateStatsDisplay();
+                updateChart();
+                
+                // Update summary
+                const avgRssi = Math.round(Object.values(currentData).reduce((sum, node) => sum + node.rssi, 0) / 4);
+                document.getElementById('avgRssi').textContent = avgRssi + ' dBm';
+                document.getElementById('lastUpdate').textContent = 'Just now';
             }, 30000); // Every 30 seconds
         }
 
         // Initialize dashboard
-        async function init() {
+        function init() {
+            generateHistoricalData();
             initChart();
-            await fetchHistoricalData(); // Fetch historical data first to populate chart
-            await fetchCurrentData();    // Then fetch current data to populate stats and summary
+            updateStatsDisplay();
+            updateChart();
             simulateRealTimeUpdates();
         }
 
