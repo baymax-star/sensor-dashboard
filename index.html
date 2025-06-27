@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multi-Node Environmental Monitor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -46,6 +47,26 @@
             font-size: 1.1rem;
         }
 
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 10px;
+            background: #ff4757;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #2ed573;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
         .cards-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -60,6 +81,11 @@
             padding: 25px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .node-card:hover {
+            transform: translateY(-5px);
         }
 
         .node-label {
@@ -109,6 +135,9 @@
 
         .sensor-item {
             text-align: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
         }
 
         .sensor-label {
@@ -134,6 +163,7 @@
             border-radius: 20px;
             padding: 30px;
             border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 20px;
         }
 
         .chart-title {
@@ -141,6 +171,13 @@
             font-weight: 600;
             margin-bottom: 20px;
             text-align: center;
+        }
+
+        .chart-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
         }
 
         .btn {
@@ -164,106 +201,195 @@
             border-color: #4ecdc4;
         }
 
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .error {
+            background: rgba(255, 71, 87, 0.2);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .last-update {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            margin-top: 20px;
+        }
+
         @media (max-width: 768px) {
             .header h1 { font-size: 2rem; }
             .cards-grid { grid-template-columns: 1fr; }
             .sensors-grid { grid-template-columns: 1fr 1fr; }
+            .chart-controls { flex-wrap: wrap; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Dashboard Monitoring</h1>
-            <p>Real-time monitoring 4 node sensor</p>
+            <h1>Dashboard Monitoring <span class="status-indicator" id="connectionStatus"></span></h1>
+            <p>Real-time monitoring kadar gas beracun</p>
         </div>
 
+        <div id="errorMessage" class="error" style="display: none;"></div>
+        
         <div class="cards-grid" id="cardsGrid">
-            <!-- Cards will be generated here -->
+            <div class="loading">Loading data sensor...</div>
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">Grafik Monitoring 24 Jam Terakhir - Semua Node</div>
+            <div class="chart-title">Grafik Monitoring Sensor Environment</div>
+            <div class="chart-controls">
+                <button class="btn active" onclick="setPeriod('1h')">1 Jam</button>
+                <button class="btn" onclick="setPeriod('6h')">6 Jam</button>
+                <button class="btn" onclick="setPeriod('24h')">24 Jam</button>
+                <button class="btn" onclick="setPeriod('7d')">7 Hari</button>
+            </div>
             <canvas id="sensorChart" width="400" height="200"></canvas>
         </div>
+
+        <div class="last-update" id="lastUpdate"></div>
     </div>
 
     <script>
-        // Data nodes
-        const nodes = [
-            { id: 1, name: 'Area A', location: 'Zona Utara', co2: 425, h2s: 2.5, rssi: -63, battery: 78 },
-            { id: 2, name: 'Area B', location: 'Zona Timur', co2: 383, h2s: 2.1, rssi: -68, battery: 85 },
-            { id: 3, name: 'Area C', location: 'Zona Barat', co2: 452, h2s: 3.4, rssi: -64, battery: 72 },
-            { id: 4, name: 'Area D', location: 'Zona Selatan', co2: 389, h2s: 2.3, rssi: -72, battery: 90 }
-        ];
+        // Supabase configuration
+        const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let chart;
-        let currentPeriod = '24h';
+        let currentPeriod = '1h';
+        let sensorData = [];
+        let isConnected = false;
 
-        // Generate historical data
-        function generateHistoricalData() {
-            const data = {};
-            const now = new Date();
+        // Initialize dashboard
+        async function init() {
+            try {
+                await loadSensorData();
+                initChart();
+                setInterval(loadSensorData, 30000); // Update every 30 seconds
+            } catch (error) {
+                showError('Gagal menginisialisasi dashboard: ' + error.message);
+            }
+        }
+
+        // Load sensor data from Supabase
+        async function loadSensorData() {
+            try {
+                const { data, error } = await supabase
+                    .from('sensor_dashboard')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                sensorData = data;
+                updateConnectionStatus(true);
+                renderCards();
+                updateChart();
+                updateLastUpdateTime();
+                hideError();
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                updateConnectionStatus(false);
+                showError('Gagal memuat data sensor: ' + error.message);
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = 'status-indicator ' + (connected ? 'connected' : '');
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+        }
+
+        // Hide error message
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        // Group data by device_id for cards
+        function getLatestDataByDevice() {
+            const deviceData = {};
             
-            nodes.forEach(node => {
-                data[node.id] = {
-                    timestamps: [],
-                    co2: [],
-                    h2s: []
-                };
-
-                for (let i = 24; i >= 0; i--) {
-                    const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
-                    data[node.id].timestamps.push(timestamp);
-                    
-                    // Generate realistic data with variations
-                    const baseCO2 = node.co2 + (Math.random() - 0.5) * 50;
-                    const baseH2S = node.h2s + (Math.random() - 0.5) * 2;
-                    
-                    data[node.id].co2.push(Math.max(300, baseCO2));
-                    data[node.id].h2s.push(Math.max(0.5, baseH2S));
+            sensorData.forEach(record => {
+                if (!deviceData[record.device_id] || 
+                    new Date(record.created_at) > new Date(deviceData[record.device_id].created_at)) {
+                    deviceData[record.device_id] = record;
                 }
             });
             
-            return data;
+            return Object.values(deviceData);
         }
 
-        // Initialize cards
-        function initCards() {
+        // Render node cards
+        function renderCards() {
             const cardsGrid = document.getElementById('cardsGrid');
+            const latestData = getLatestDataByDevice();
+            
+            if (latestData.length === 0) {
+                cardsGrid.innerHTML = '<div class="loading">Tidak ada data sensor tersedia</div>';
+                return;
+            }
+
             cardsGrid.innerHTML = '';
 
-            nodes.forEach(node => {
+            latestData.forEach((device, index) => {
                 const card = document.createElement('div');
                 card.className = 'node-card';
+                
+                // Get device info
+                const deviceName = `Node ${device.device_id}`;
+                const location = `Sensor ${device.device_id}`;
+                
+                // Calculate battery percentage from voltage (assuming 3.3V = 100%)
+                const batteryPercent = Math.min(100, Math.max(0, Math.round((device.voltage / 3.3) * 100)));
+                
                 card.innerHTML = `
-                    <div class="node-label">Node ${node.id}</div>
+                    <div class="node-label">${device.device_id}</div>
                     <div class="node-header">
                         <div class="node-icon">🏭</div>
                         <div class="node-info">
-                            <h3>${node.name}</h3>
-                            <p>${node.location}</p>
+                            <h3>${deviceName}</h3>
+                            <p>${location}</p>
                         </div>
                     </div>
                     <div class="sensors-grid">
                         <div class="sensor-item">
                             <div class="sensor-label">CO₂</div>
-                            <div class="sensor-value">${node.co2}</div>
+                            <div class="sensor-value">${device.co2_ppm || 0}</div>
                             <div class="sensor-unit">ppm</div>
                         </div>
                         <div class="sensor-item">
                             <div class="sensor-label">H₂S</div>
-                            <div class="sensor-value">${node.h2s}</div>
+                            <div class="sensor-value">${device.h2s_ppm || 0}</div>
                             <div class="sensor-unit">ppm</div>
                         </div>
                         <div class="sensor-item">
-                            <div class="sensor-label">RSSI</div>
-                            <div class="sensor-value">${node.rssi}</div>
+                            <div class="sensor-label">Signal</div>
+                            <div class="sensor-value">${device.gateway_rssi || 0}</div>
                             <div class="sensor-unit">dBm</div>
                         </div>
                         <div class="sensor-item">
                             <div class="sensor-label">Battery</div>
-                            <div class="sensor-value">${node.battery}</div>
+                            <div class="sensor-value">${batteryPercent}</div>
                             <div class="sensor-unit">%</div>
                         </div>
                     </div>
@@ -272,50 +398,40 @@
             });
         }
 
+        // Filter data by time period
+        function filterDataByPeriod(data, period) {
+            const now = new Date();
+            let startTime;
+            
+            switch (period) {
+                case '1h':
+                    startTime = new Date(now.getTime() - 60 * 60 * 1000);
+                    break;
+                case '6h':
+                    startTime = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+                    break;
+                case '24h':
+                    startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                    break;
+                case '7d':
+                    startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                default:
+                    startTime = new Date(now.getTime() - 60 * 60 * 1000);
+            }
+            
+            return data.filter(record => new Date(record.created_at) >= startTime);
+        }
+
         // Initialize chart
         function initChart() {
             const ctx = document.getElementById('sensorChart').getContext('2d');
-            const historicalData = generateHistoricalData();
             
-            // Prepare datasets
-            const datasets = [];
-            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
-            const h2sColors = ['#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
-
-            nodes.forEach((node, index) => {
-                datasets.push({
-                    label: `Node ${node.id} CO₂`,
-                    data: historicalData[node.id].co2,
-                    borderColor: colors[index],
-                    backgroundColor: colors[index] + '20',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.4,
-                    yAxisID: 'y'
-                });
-
-                datasets.push({
-                    label: `Node ${node.id} H₂S`,
-                    data: historicalData[node.id].h2s,
-                    borderColor: h2sColors[index],
-                    backgroundColor: h2sColors[index] + '20',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.4,
-                    yAxisID: 'y1'
-                });
-            });
-
-            // Generate labels (hours)
-            const labels = historicalData[1].timestamps.map(ts => {
-                return ts.getHours().toString().padStart(2, '0') + ':00';
-            });
-
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: labels,
-                    datasets: datasets
+                    labels: [],
+                    datasets: []
                 },
                 options: {
                     responsive: true,
@@ -349,9 +465,7 @@
                             position: 'left',
                             title: { display: true, text: 'CO₂ (ppm)', color: 'white' },
                             ticks: { color: 'white' },
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                            min: 300,
-                            max: 520
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
                         },
                         y1: {
                             type: 'linear',
@@ -359,16 +473,82 @@
                             position: 'right',
                             title: { display: true, text: 'H₂S (ppm)', color: 'white' },
                             ticks: { color: 'white' },
-                            grid: { drawOnChartArea: false },
-                            min: 0,
-                            max: 6
+                            grid: { drawOnChartArea: false }
                         }
                     }
                 }
             });
         }
 
-        // Set period
+        // Update chart data
+        function updateChart() {
+            if (!chart || sensorData.length === 0) return;
+
+            const filteredData = filterDataByPeriod(sensorData, currentPeriod);
+            const deviceIds = [...new Set(filteredData.map(d => d.device_id))].sort();
+            
+            // Group data by device
+            const deviceData = {};
+            deviceIds.forEach(id => {
+                deviceData[id] = filteredData
+                    .filter(d => d.device_id === id)
+                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            });
+
+            // Prepare datasets
+            const datasets = [];
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3'];
+            const h2sColors = ['#feca57', '#ff9ff3', '#54a0ff', '#5f27cd', '#ff6b6b', '#4ecdc4'];
+
+            deviceIds.forEach((deviceId, index) => {
+                const data = deviceData[deviceId];
+                
+                if (data.length === 0) return;
+
+                // CO2 dataset
+                datasets.push({
+                    label: `${deviceId} CO₂`,
+                    data: data.map(d => d.co2_ppm || 0),
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    yAxisID: 'y'
+                });
+
+                // H2S dataset
+                datasets.push({
+                    label: `${deviceId} H₂S`,
+                    data: data.map(d => d.h2s_ppm || 0),
+                    borderColor: h2sColors[index % h2sColors.length],
+                    backgroundColor: h2sColors[index % h2sColors.length] + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                });
+            });
+
+            // Generate labels from the most recent device data
+            let labels = [];
+            if (deviceIds.length > 0 && deviceData[deviceIds[0]]) {
+                labels = deviceData[deviceIds[0]].map(d => {
+                    const date = new Date(d.created_at);
+                    if (currentPeriod === '7d') {
+                        return date.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
+                    } else {
+                        return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                    }
+                });
+            }
+
+            chart.data.labels = labels;
+            chart.data.datasets = datasets;
+            chart.update();
+        }
+
+        // Set time period
         function setPeriod(period) {
             currentPeriod = period;
             
@@ -376,16 +556,14 @@
             document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             
-            // Update chart (in a real app, you'd filter the data based on period)
-            // For simplicity, we'll just update the title
-            const title = `Grafik Monitoring ${period.toUpperCase()} Terakhir - Semua Node`;
-            document.querySelector('.chart-title').textContent = title;
+            updateChart();
         }
 
-        // Initialize dashboard
-        function init() {
-            initCards();
-            initChart();
+        // Update last update time
+        function updateLastUpdateTime() {
+            const lastUpdateEl = document.getElementById('lastUpdate');
+            const now = new Date();
+            lastUpdateEl.textContent = `Terakhir diperbarui: ${now.toLocaleString('id-ID')}`;
         }
 
         // Start when page loads
