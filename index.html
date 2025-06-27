@@ -236,7 +236,7 @@
     <div class="container">
         <div class="header">
             <h1>Dashboard Monitoring <span class="status-indicator" id="connectionStatus"></span></h1>
-            <p>Real-time monitoring kadar gas beracun</p>
+            <p>Real-time monitoring sensor environment dengan Supabase</p>
         </div>
 
         <div id="errorMessage" class="error" style="display: none;"></div>
@@ -262,7 +262,7 @@
     <script>
         // Supabase configuration
         const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU5MzI3MTYsImV4cCI6MjA1MTUwODcxNn0.L1BjZaGZ9UNUmxoTRwrUfRhzJiZOhY7ksRMvKiJxPOU';
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -383,9 +383,9 @@
                             <div class="sensor-unit">ppm</div>
                         </div>
                         <div class="sensor-item">
-                            <div class="sensor-label">Signal</div>
-                            <div class="sensor-value">${device.gateway_rssi || 0}</div>
-                            <div class="sensor-unit">dBm</div>
+                            <div class="sensor-label">Voltage</div>
+                            <div class="sensor-value">${device.voltage ? device.voltage.toFixed(2) : 0}</div>
+                            <div class="sensor-unit">V</div>
                         </div>
                         <div class="sensor-item">
                             <div class="sensor-label">Battery</div>
