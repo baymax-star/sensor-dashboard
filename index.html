@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Node Sensor Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.1rem;
+        }
+
+        .node-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .node-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            position: relative;
+        }
+
+        .node-btn:hover, .node-btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .node-btn.active {
+            border-color: #4ecdc4;
+            background: rgba(78, 205, 196, 0.2);
+        }
+
+        .node-status {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+
+        .status-online { background: #2ecc71; }
+        .status-offline { background: #e74c3c; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .node-label {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: rgba(78, 205, 196, 0.3);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .co2-icon { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
+        .h2s-icon { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
+        .rssi-icon { background: linear-gradient(135deg, #45b7d1, #2c3e50); }
+        .battery-icon { background: linear-gradient(135deg, #96ceb4, #ffecd2); }
+
+        .stat-title {
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            color: white;
+            font-size: 2.2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-unit {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+
+        .stat-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .status-good { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+        .status-warning { background: rgba(241, 196, 15, 0.2); color: #f1c40f; }
+        .status-danger { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .chart-title {
+            color: white;
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn:hover, .btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 25px;
+            color: white;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .online { background: rgba(46, 204, 113, 0.3); }
+        .offline { background: rgba(231, 76, 60, 0.3); }
+
+        .summary-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .summary-title {
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            text-align: center;
+        }
+
+        .summary-item {
+            color: white;
+        }
+
+        .summary-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .summary-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 { font-size: 2rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .controls { flex-direction: column; align-items: center; }
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="status-indicator online" id="connectionStatus">
+        🟢 Online - 4 Nodes Active
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Dashboard Monitoring</h1>
+            <p>Real-time monitoring 4 node sensor</p>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-title">Network Status Overview</div>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-label">Total Nodes</div>
+                    <div class="summary-value" id="totalNodes">4</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Online</div>
+                    <div class="summary-value" id="onlineNodes">4</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Avg RSSI</div>
+                    <div class="summary-value" id="avgRssi">-65 dBm</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Last Update</div>
+                    <div class="summary-value" id="lastUpdate">Just now</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="node-selector">
+            <button class="node-btn active" onclick="selectNode('all')" data-node="all">
+                All Nodes
+                <div class="node-status status-online"></div>
+            </button>
+            <button class="node-btn" onclick="selectNode(1)" data-node="1">
+                Node 1 - Area A
+                <div class="node-status status-online"></div>
+            </button>
+            <button class="node-btn" onclick="selectNode(2)" data-node="2">
+                Node 2 - Area B
+                <div class="node-status status-online"></div>
+            </button>
+            <button class="node-btn" onclick="selectNode(3)" data-node="3">
+                Node 3 - Area C
+                <div class="node-status status-online"></div>
+            </button>
+            <button class="node-btn" onclick="selectNode(4)" data-node="4">
+                Node 4 - Area D
+                <div class="node-status status-online"></div>
+            </button>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <!-- Dynamic content will be inserted here -->
+        </div>
+
+        <div class="controls">
+            <button class="btn active" onclick="showChart('24h')">24 Jam</button>
+            <button class="btn" onclick="showChart('12h')">12 Jam</button>
+            <button class="btn" onclick="showChart('6h')">6 Jam</button>      
+            <button class="btn" onclick="refreshData()">Refresh</button>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title" id="chartTitle">Grafik Monitoring 24 Jam Terakhir - Semua Node</div>
+            <canvas id="sensorChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+    <script>
+// Global variables
+        const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co'; // Ganti dengan Project URL Anda
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk'; // Ganti dengan Anon Public Key Anda
+        const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let chart;
+        let selectedNode = 'all';
+        let selectedPeriod = '24h';
+        const ctx = document.getElementById('sensorChart').getContext('2d');
+
+        // Node data structure
+        const nodes = {
+            1: { name: 'Area A', location: 'Zona Timur', online: true },
+            2: { name: 'Area B', location: 'Zona Utara', online: true },
+            3: { name: 'Area C', location: 'Zona Barat', online: true },
+            4: { name: 'Area D', location: 'Zona Selatan', online: true }
+        };
+ const DEVICE_IDS = Object.keys(nodes); // Array of device_id strings
+
+        // Current sensor data for each node, akan diisi dari Supabase
+        const currentData = {
+            'node-1': {},
+            'node-2': {},
+            'node-3': {},
+            'node-4': {}
+        };
+
+        // Historical data (24 hours) for chart
+        const historicalData = {};
+
+        // Fungsi untuk mengambil data terkini dari Supabase
+        async function fetchCurrentData() {
+            const { data, error } = await supabase
+                .from('sensor_dashboard') // Nama tabel Anda
+                .select('device_id, co2_ppm, h2s_ppm, gateway_rssi, voltage, current, power, created_at')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching current data:', error);
+                document.getElementById('connectionStatus').className = 'status-indicator offline';
+                document.getElementById('connectionStatus').innerHTML = '🔴 Offline - Error fetching data';
+                return;
+            }
+
+            // Group latest data by device_id
+            const latestDataByNode = {};
+            const activeNodes = new Set();
+            data.forEach(row => {
+                if (!latestDataByNode[row.device_id]) {
+                    latestDataByNode[row.device_id] = row;
+                    activeNodes.add(row.device_id);
+                }
+            });
+
+            // Update currentData and node online status
+            let onlineNodeCount = 0;
+            let totalRssi = 0;
+            let lastUpdateTimestamp = 0;
+
+            for (const deviceId of DEVICE_IDS) {
+                if (latestDataByNode[deviceId]) {
+                    currentData[deviceId] = {
+                        co2: latestDataByNode[deviceId].co2_ppm,
+                        h2s: latestDataByNode[deviceId].h2s_ppm,
+                        rssi: latestDataByNode[deviceId].gateway_rssi,
+                        voltage: latestDataByNode[deviceId].voltage,
+                        current: latestDataByNode[deviceId].current,
+                        power: latestDataByNode[deviceId].power,
+                        battery: calculateBatteryPercentage(latestDataByNode[deviceId].voltage), // Hitung % baterai dari voltage
+                        last_seen: new Date(latestDataByNode[deviceId].created_at)
+                    };
+                    nodes[deviceId].online = true;
+                    onlineNodeCount++;
+                    totalRssi += latestDataByByNode[deviceId].gateway_rssi;
+                    if (latestDataByNode[deviceId].last_seen.getTime() > lastUpdateTimestamp) {
+                        lastUpdateTimestamp = latestDataByNode[deviceId].last_seen.getTime();
+                    }
+                } else {
+                    nodes[deviceId].online = false;
+                    // Optionally clear or set default for currentData[deviceId] if offline
+                    currentData[deviceId] = { co2: null, h2s: null, rssi: null, voltage: null, current: null, power: null, battery: null, last_seen: null };
+                }
+            }
+
+            // Update summary status
+            document.getElementById('onlineNodes').textContent = onlineNodeCount;
+            document.getElementById('totalNodes').textContent = DEVICE_IDS.length;
+            document.getElementById('avgRssi').textContent = onlineNodeCount > 0 ? `${Math.round(totalRssi / onlineNodeCount)} dBm` : 'N/A';
+            document.getElementById('lastUpdate').textContent = lastUpdateTimestamp ? formatRelativeTime(new Date(lastUpdateTimestamp)) : 'N/A';
+
+            document.getElementById('connectionStatus').className = `status-indicator ${onlineNodeCount > 0 ? 'online' : 'offline'}`;
+            document.getElementById('connectionStatus').innerHTML = `${onlineNodeCount > 0 ? '🟢 Online' : '🔴 Offline'} - ${onlineNodeCount} Nodes Active`;
+
+            // Update node button statuses
+            DEVICE_IDS.forEach(id => {
+                const button = document.querySelector(`.node-btn[data-node="${id}"] .node-status`);
+                if (button) {
+                    button.classList.remove('status-online', 'status-offline');
+                    button.classList.add(nodes[id].online ? 'status-online' : 'status-offline');
+                }
+            });
+
+            updateStatsDisplay();
+        }
+
+        // Fungsi untuk mengambil data historis dari Supabase
+        async function fetchHistoricalData() {
+            const now = new Date();
+            const hoursBack = 25; // Fetch enough data for 24h chart
+            const startTime = new Date(now.getTime() - hoursBack * 60 * 60 * 1000).toISOString();
+
+            const { data, error } = await supabase
+                .from('sensor_dashboard')
+                .select('device_id, co2_ppm, h2s_ppm, created_at')
+                .gte('created_at', startTime)
+                .order('created_at', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching historical data:', error);
+                return;
+            }
+
+            // Reset historical data
+            for (const deviceId of DEVICE_IDS) {
+                historicalData[deviceId] = {
+                    timestamps: [],
+                    co2: [],
+                    h2s: []
+                };
+            }
+
+            // Populate historicalData
+            data.forEach(row => {
+                const deviceId = row.device_id;
+                if (historicalData[deviceId]) {
+                    historicalData[deviceId].timestamps.push(new Date(row.created_at));
+                    historicalData[deviceId].co2.push(row.co2_ppm);
+                    historicalData[deviceId].h2s.push(row.h2s_ppm);
+                }
+            });
+
+            updateChart();
+        }
+
+        // Calculate battery percentage from voltage (adjust this logic based on your sensor's battery characteristics)
+        function calculateBatteryPercentage(voltage) {
+            if (voltage === null || voltage === undefined) return null;
+            // Example for a 3.7V LiPo battery, adjust min/max voltage as needed
+            const MIN_VOLTAGE = 3.0; // Minimum voltage (e.g., empty)
+            const MAX_VOLTAGE = 4.2; // Maximum voltage (e.g., full)
+
+            let percentage = ((voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE)) * 100;
+            return Math.max(0, Math.min(100, Math.round(percentage)));
+        }
+
+        // Helper to format relative time
+        function formatRelativeTime(date) {
+            const now = new Date();
+            const diffSeconds = Math.round((now - date) / 1000);
+            if (diffSeconds < 60) return 'Just now';
+            const diffMinutes = Math.round(diffSeconds / 60);
+            if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+            const diffHours = Math.round(diffMinutes / 60);
+            if (diffHours < 24) return `${diffHours} hours ago`;
+            return date.toLocaleDateString(); // Fallback for older data
+        }
+
+
+        // Initialize chart
+        function initChart() {
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: 'white', font: { size: 12 } }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: 'white',
+                            bodyColor: 'white'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: 'white', maxTicksLimit: 12 },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'CO₂ (ppm)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'H₂S (ppm)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update chart based on selected node and period
+        function updateChart() {
+            const datasets = [];
+            const labels = [];
+            
+            if (selectedNode === 'all') {
+                // Show all nodes
+                const colorsCO2 = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
+                const colorsH2S = ['#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
+                
+                DEVICE_IDS.forEach((deviceId, index) => {
+                    const nodeData = getDataForPeriod(deviceId, selectedPeriod);
+                    
+                    if (nodeData.timestamps.length > 0) {
+                        datasets.push({
+                            label: `${nodes[deviceId].name} CO₂`,
+                            data: nodeData.co2,
+                            borderColor: colorsCO2[index % colorsCO2.length],
+                            backgroundColor: colorsCO2[index % colorsCO2.length] + '20',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        });
+                        
+                        datasets.push({
+                            label: `${nodes[deviceId].name} H₂S`,
+                            data: nodeData.h2s,
+                            borderColor: colorsH2S[index % colorsH2S.length],
+                            backgroundColor: colorsH2S[index % colorsH2S.length] + '20',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        });
+                    }
+                });
+                
+                // Use labels from the first available node (assuming timestamps are roughly aligned)
+                if (historicalData[DEVICE_IDS[0]]) {
+                    labels.push(...getLabelsForPeriod(selectedPeriod));
+                }
+            } else {
+                // Show single node
+                const nodeData = getDataForPeriod(selectedNode, selectedPeriod);
+                
+                if (nodeData.timestamps.length > 0) {
+                    datasets.push({
+                        label: 'CO₂ (ppm)',
+                        data: nodeData.co2,
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    });
+                    
+                    datasets.push({
+                        label: 'H₂S (ppm)',
+                        data: nodeData.h2s,
+                        borderColor: '#4ecdc4',
+                        backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    });
+                }
+                
+                labels.push(...getLabelsForPeriod(selectedPeriod));
+            }
+            
+            chart.data.labels = labels;
+            chart.data.datasets = datasets;
+            chart.update();
+        }
+
+        // Get data for specific period
+        function getDataForPeriod(deviceId, period) {
+            if (!historicalData[deviceId]) return { timestamps: [], co2: [], h2s: [] };
+            
+            const hoursBack = period === '24h' ? 24 : period === '12h' ? 12 : 6;
+            
+            const now = new Date();
+            const cutoffTime = now.getTime() - hoursBack * 60 * 60 * 1000;
+
+            const filteredTimestamps = [];
+            const filteredCo2 = [];
+            const filteredH2s = [];
+
+            for (let i = 0; i < historicalData[deviceId].timestamps.length; i++) {
+                if (historicalData[deviceId].timestamps[i].getTime() >= cutoffTime) {
+                    filteredTimestamps.push(historicalData[deviceId].timestamps[i]);
+                    filteredCo2.push(historicalData[deviceId].co2[i]);
+                    filteredH2s.push(historicalData[deviceId].h2s[i]);
+                }
+            }
+
+            return {
+                timestamps: filteredTimestamps,
+                co2: filteredCo2,
+                h2s: filteredH2s
+            };
+        }
+
+        // Get labels for specific period
+        function getLabelsForPeriod(period) {
+            const firstNodeId = DEVICE_IDS[0];
+            if (!historicalData[firstNodeId] || historicalData[firstNodeId].timestamps.length === 0) return [];
+            
+            const dataForLabels = getDataForPeriod(firstNodeId, period);
+            
+            return dataForLabels.timestamps.map(ts => {
+                return ts.getHours().toString().padStart(2, '0') + ':00';
+            });
+        }
+
+        // Update stats display
+        function updateStatsDisplay() {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            if (selectedNode === 'all') {
+                // Show summary cards for all nodes
+                DEVICE_IDS.forEach(deviceId => {
+                    const data = currentData[deviceId];
+                    const node = nodes[deviceId];
+                    
+                    // Display N/A if data is not available (e.g., node offline or no data yet)
+                    const co2Val = data.co2 !== null ? data.co2 : 'N/A';
+                    const h2sVal = data.h2s !== null ? data.h2s : 'N/A';
+                    const rssiVal = data.rssi !== null ? data.rssi : 'N/A';
+                    const batteryVal = data.battery !== null ? data.battery : 'N/A';
+                    const voltageVal = data.voltage !== null ? data.voltage : 'N/A';
+                    const currentVal = data.current !== null ? data.current : 'N/A';
+                    const powerVal = data.power !== null ? data.power : 'N/A';
+
+
+                    statsGrid.innerHTML += `
+                        <div class="stat-card">
+                            <div class="node-label">${node.name}</div>
+                            <div class="stat-header">
+                                <div class="stat-icon co2-icon">🏭</div>
+                                <div>
+                                    <div class="stat-title">Node ${node.numericId}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">${node.location}</div>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                                <div>
+                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">CO₂</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${co2Val}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">ppm</div>
+                                </div>
+                                <div>
+                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">H₂S</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${h2sVal}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">ppm</div>
+                                </div>
+                                <div>
+                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">RSSI</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${rssiVal}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">dBm</div>
+                                </div>
+                                <div>
+                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Battery</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${batteryVal}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">%</div>
+                                </div>
+                                <div>
+                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Voltage</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${voltageVal}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">V</div>
+                                </div>
+                                <div>
+                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Current</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${currentVal}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">A</div>
+                                </div>
+                                <div>
+                                    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Power</div>
+                                    <div style="color: white; font-size: 1.4rem; font-weight: bold;">${powerVal}</div>
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">W</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                // Show detailed cards for selected node
+                const data = currentData[selectedNode];
+                const node = nodes[selectedNode];
+
+                // Check if data is available for the selected node
+                if (!data || Object.keys(data).length === 0 || data.co2 === null) {
+                    statsGrid.innerHTML = `
+                        <div class="stat-card" style="grid-column: 1 / -1; text-align: center; color: rgba(255,255,255,0.7);">
+                            Tidak ada data untuk Node ${node.numericId} (${node.name}) atau node sedang offline.
+                        </div>
+                    `;
+                    return;
+                }
+
+                const sensors = [
+                    { key: 'co2', title: 'Carbon Dioxide', unit: 'ppm', icon: '🏭', class: 'co2-icon', value: data.co2 },
+                    { key: 'h2s', title: 'Hydrogen Sulfide', unit: 'ppm', icon: '☠️', class: 'h2s-icon', value: data.h2s },
+                    { key: 'rssi', title: 'Signal Strength', unit: 'dBm', icon: '📶', class: 'rssi-icon', value: data.rssi },
+                    { key: 'battery', title: 'Battery Level', unit: '%', icon: '🔋', class: 'battery-icon', value: data.battery },
+                    { key: 'voltage', title: 'Voltage', unit: 'V', icon: '⚡', class: 'voltage-icon', value: data.voltage },
+                    { key: 'current', title: 'Current', unit: 'A', icon: '🔌', class: 'current-icon', value: data.current },
+                    { key: 'power', title: 'Power', unit: 'W', icon: '💡', class: 'power-icon', value: data.power }
+                ];
+
+                sensors.forEach(sensor => {
+                    const value = sensor.value !== null ? sensor.value : 'N/A';
+                    const status = getStatus(sensor.key, sensor.value);
+                    
+                    statsGrid.innerHTML += `
+                        <div class="stat-card">
+                            <div class="node-label">${node.name}</div>
+                            <div class="stat-header">
+                                <div class="stat-icon ${sensor.class}">${sensor.icon}</div>
+                                <div class="stat-title">${sensor.title}</div>
+                            </div>
+                            <div class="stat-value">${value}</div>
+                            <div class="stat-unit">${sensor.unit}</div>
+                            <div class="stat-status ${status.class}">${status.text}</div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        // Get status for sensor value
+        function getStatus(type, value) {
+            let statusClass, statusText;
+
+            if (value === null || value === undefined) {
+                return { class: 'status-warning', text: 'No Data' };
+            }
+
+            switch (type) {
+                case 'co2':
+                    if (value < 400) {
+                        statusClass = 'status-good';
+                        statusText = 'Normal';
+                    } else if (value < 1000) {
+                        statusClass = 'status-warning';
+                        statusText = 'Warning';
+                    } else {
+                        statusClass = 'status-danger';
+                        statusText = 'Bahaya';
+                    }
+                    break;
+                case 'h2s':
+                    if (value < 10) {
+                        statusClass = 'status-good';
+                        statusText = 'Aman';
+                    } else if (value < 20) {
+                        statusClass = 'status-warning';
+                        statusText = 'Warning';
+                    } else {
+                        statusClass = 'status-danger';
+                        statusText = 'Bahaya';
+                    }
+                    break;
+                case 'rssi':
+                    if (value > -70) {
+                        statusClass = 'status-good';
+                        statusText = 'Kuat';
+                    } else if (value > -80) {
+                        statusClass = 'status-warning';
+                        statusText = 'Sedang';
+                    } else {
+                        statusClass = 'status-danger';
+                        statusText = 'Lemah';
+                    }
+                    break;
+                case 'battery':
+                    if (value > 50) {
+                        statusClass = 'status-good';
+                        statusText = 'Good';
+                    } else if (value > 20) {
+                        statusClass = 'status-warning';
+                        statusText = 'Low';
+                    } else {
+                        statusClass = 'status-danger';
+                        statusText = 'Critical';
+                    }
+                    break;
+                case 'voltage':
+                    if (value > 3.7) { // Example threshold, adjust as needed
+                        statusClass = 'status-good';
+                        statusText = 'Optimal';
+                    } else if (value > 3.3) {
+                        statusClass = 'status-warning';
+                        statusText = 'Normal';
+                    } else {
+                        statusClass = 'status-danger';
+                        statusText = 'Low';
+                    }
+                    break;
+                case 'current': // Example thresholds for current
+                    if (value < 0.1) { // Very low current, potentially idle
+                        statusClass = 'status-good';
+                        statusText = 'Idle';
+                    } else if (value < 0.5) { // Moderate current
+                        statusClass = 'status-warning';
+                        statusText = 'Active';
+                    } else { // High current, potentially anomaly
+                        statusClass = 'status-danger';
+                        statusText = 'High';
+                    }
+                    break;
+                case 'power': // Example thresholds for power
+                    if (value < 0.5) {
+                        statusClass = 'status-good';
+                        statusText = 'Low Usage';
+                    } else if (value < 2.0) {
+                        statusClass = 'status-warning';
+                        statusText = 'Moderate Usage';
+                    } else {
+                        statusClass = 'status-danger';
+                        statusText = 'High Usage';
+                    }
+                    break;
+            }
+
+            return { class: statusClass, text: statusText };
+        }
+
+        // Select node
+        function selectNode(nodeId) {
+            selectedNode = nodeId;
+            
+            // Update active button
+            document.querySelectorAll('.node-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-node="${nodeId}"]`).classList.add('active');
+            
+            // Update chart title
+            const title = nodeId === 'all' ? 
+                `Grafik Monitoring ${selectedPeriod.toUpperCase()} Terakhir - Semua Node` :
+                `Grafik Monitoring ${selectedPeriod.toUpperCase()} Terakhir - Node ${nodes[nodeId].numericId} (${nodes[nodeId].name})`;
+            document.getElementById('chartTitle').textContent = title;
+            
+            updateStatsDisplay();
+            updateChart();
+        }
+
+        // Show chart period
+        function showChart(period) {
+            selectedPeriod = period;
+            
+            // Update active button
+            document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
+            // Use event.currentTarget for reliability inside event handler
+            const targetButton = event.currentTarget || document.querySelector(`.btn.active`); 
+            if (targetButton) {
+                targetButton.classList.remove('active');
+            }
+            document.querySelector(`.btn[onclick="showChart('${period}')"]`).classList.add('active');
+            
+            // Update chart title
+            const title = selectedNode === 'all' ? 
+                `Grafik Monitoring ${period.toUpperCase()} Terakhir - Semua Node` :
+                `Grafik Monitoring ${period.toUpperCase()} Terakhir - Node ${nodes[selectedNode].numericId} (${nodes[selectedNode].name})`;
+            document.getElementById('chartTitle').textContent = title;
+            
+            updateChart();
+        }
+
+        // Refresh data
+        async function refreshData() {
+            document.getElementById('connectionStatus').className = 'status-indicator offline';
+            document.getElementById('connectionStatus').innerHTML = '🟡 Refreshing...';
+            
+            await fetchCurrentData();
+            await fetchHistoricalData();
+
+            // Status indicator and summary are updated by fetchCurrentData now
+        }
+
+        // Simulate real-time updates by polling Supabase
+        function simulateRealTimeUpdates() {
+            setInterval(async () => {
+                await fetchCurrentData();
+                await fetchHistoricalData(); // Call this less frequently if data volume is very high, or optimize to fetch only new points
+            }, 30000); // Every 30 seconds
+        }
+
+        // Initialize dashboard
+        async function init() {
+            initChart();
+            await fetchHistoricalData(); // Fetch historical data first to populate chart
+            await fetchCurrentData();    // Then fetch current data to populate stats and summary
+            simulateRealTimeUpdates();
+        }
+
+        // Start dashboard when page loads
+        window.addEventListener('load', init);
+
+        // Add interactive effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add hover effects to stat cards
+            setTimeout(() => {
+                document.querySelectorAll('.stat-card').forEach(card => {
+                    card.addEventListener('mouseenter', function() {
+                        this.style.transform = 'translateY(-8px) scale(1.02)';
+                    });
+                    
+                    card.addEventListener('mouseleave', function() {
+                        this.style.transform = 'translateY(0) scale(1)';
+                    });
+                });
+            }, 100);
+        });
+    </script>
+</body>
+</html>
