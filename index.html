@@ -69,7 +69,7 @@
 
         .cards-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -130,31 +130,59 @@
         .sensors-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            gap: 12px;
+            margin-bottom: 15px;
         }
 
         .sensor-item {
             text-align: center;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 10px;
-            padding: 15px;
+            padding: 12px;
         }
 
         .sensor-label {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: rgba(255, 255, 255, 0.7);
             margin-bottom: 5px;
         }
 
         .sensor-value {
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             font-weight: bold;
             margin-bottom: 2px;
         }
 
         .sensor-unit {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: rgba(255, 255, 255, 0.6);
+        }
+
+        .power-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .gateway-info {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .gateway-info .gateway-label {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .timestamp-info {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            margin-top: 10px;
         }
 
         .chart-container {
@@ -228,6 +256,7 @@
             .header h1 { font-size: 2rem; }
             .cards-grid { grid-template-columns: 1fr; }
             .sensors-grid { grid-template-columns: 1fr 1fr; }
+            .power-grid { grid-template-columns: 1fr 1fr; }
             .chart-controls { flex-wrap: wrap; }
         }
     </style>
@@ -236,7 +265,7 @@
     <div class="container">
         <div class="header">
             <h1>Dashboard Monitoring <span class="status-indicator" id="connectionStatus"></span></h1>
-            <p>Real-time Monitoring Kadar Gas Beracun</p>
+            <p>Real-time monitoring kadar gas beracun </p>
         </div>
 
         <div id="errorMessage" class="error" style="display: none;"></div>
@@ -246,7 +275,13 @@
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">Grafik Monitoring Sensor Gas Beracun</div>
+            <div class="chart-title">Grafik Monitoring Sensor Environment</div>
+            <div class="chart-controls">
+                <button class="btn active" onclick="setPeriod('1h')">1 Jam</button>
+                <button class="btn" onclick="setPeriod('6h')">6 Jam</button>
+                <button class="btn" onclick="setPeriod('24h')">24 Jam</button>
+                <button class="btn" onclick="setPeriod('7d')">7 Hari</button>
+            </div>
             <canvas id="sensorChart" width="400" height="200"></canvas>
         </div>
 
@@ -256,7 +291,7 @@
     <script>
         // Supabase configuration
         const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU5MzI3MTYsImV4cCI6MjA1MTUwODcxNn0.L1BjZaGZ9UNUmxoTRwrUfRhzJiZOhY7ksRMvKiJxPOU';
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -280,7 +315,7 @@
         async function loadSensorData() {
             try {
                 const { data, error } = await supabase
-                    .from('sensor_dashboard')
+                    .from('sensor_data_complete')
                     .select('*')
                     .order('created_at', { ascending: false });
 
@@ -333,6 +368,27 @@
             return Object.values(deviceData);
         }
 
+        // Format timestamp
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Calculate battery percentage from voltage
+        function calculateBatteryPercent(voltage) {
+            if (!voltage) return 0;
+            // Assuming 3.3V = 100%, 2.5V = 0%
+            const minVolt = 2.5;
+            const maxVolt = 3.3;
+            return Math.min(100, Math.max(0, Math.round(((voltage - minVolt) / (maxVolt - minVolt)) * 100)));
+        }
+
         // Render node cards
         function renderCards() {
             const cardsGrid = document.getElementById('cardsGrid');
@@ -353,8 +409,13 @@
                 const deviceName = `Node ${device.device_id}`;
                 const location = `Sensor ${device.device_id}`;
                 
-                // Calculate battery percentage from voltage (assuming 3.3V = 100%)
-                const batteryPercent = Math.min(100, Math.max(0, Math.round((device.voltage / 3.3) * 100)));
+                // Calculate battery percentage from voltage
+                const batteryPercent = calculateBatteryPercent(device.voltage);
+                
+                // Format gateway info
+                const gatewayInfo = device.gateway_id ? 
+                    `Gateway: ${device.gateway_id}<br>RSSI: ${device.gateway_rssi || 'N/A'} dBm<br>SNR: ${device.gateway_snr || 'N/A'} dB` : 
+                    'Gateway: N/A';
                 
                 card.innerHTML = `
                     <div class="node-label">${device.device_id}</div>
@@ -386,6 +447,31 @@
                             <div class="sensor-value">${batteryPercent}</div>
                             <div class="sensor-unit">%</div>
                         </div>
+                    </div>
+                    <div class="power-grid">
+                        <div class="sensor-item">
+                            <div class="sensor-label">Current</div>
+                            <div class="sensor-value">${device.current ? device.current.toFixed(3) : 0}</div>
+                            <div class="sensor-unit">A</div>
+                        </div>
+                        <div class="sensor-item">
+                            <div class="sensor-label">Power</div>
+                            <div class="sensor-value">${device.power ? device.power.toFixed(2) : 0}</div>
+                            <div class="sensor-unit">W</div>
+                        </div>
+                        <div class="sensor-item">
+                            <div class="sensor-label">GW RSSI</div>
+                            <div class="sensor-value">${device.gateway_rssi || 'N/A'}</div>
+                            <div class="sensor-unit">dBm</div>
+                        </div>
+                    </div>
+                    <div class="gateway-info">
+                        <div class="gateway-label">Gateway Info</div>
+                        <div>${gatewayInfo}</div>
+                    </div>
+                    <div class="timestamp-info">
+                        Received: ${device.received_at ? formatTimestamp(device.received_at) : 'N/A'}<br>
+                        Created: ${formatTimestamp(device.created_at)}
                     </div>
                 `;
                 cardsGrid.appendChild(card);
