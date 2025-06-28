@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Node Environmental Monitor</title>
+    <title>Environmental Monitor Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -22,7 +22,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -69,7 +69,7 @@
 
         .cards-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -129,7 +129,7 @@
 
         .sensors-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
             margin-bottom: 15px;
         }
@@ -138,19 +138,19 @@
             text-align: center;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 10px;
-            padding: 12px;
+            padding: 15px 10px;
         }
 
         .sensor-label {
             font-size: 0.85rem;
             color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
 
         .sensor-value {
-            font-size: 1.6rem;
+            font-size: 1.8rem;
             font-weight: bold;
-            margin-bottom: 2px;
+            margin-bottom: 5px;
         }
 
         .sensor-unit {
@@ -158,31 +158,13 @@
             color: rgba(255, 255, 255, 0.6);
         }
 
-        .power-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 15px;
-        }
-
-        .gateway-info {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            padding: 10px;
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .gateway-info .gateway-label {
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
         .timestamp-info {
             font-size: 0.75rem;
             color: rgba(255, 255, 255, 0.6);
             text-align: center;
-            margin-top: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .chart-container {
@@ -199,34 +181,6 @@
             font-weight: 600;
             margin-bottom: 20px;
             text-align: center;
-        }
-
-        .chart-controls {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-        }
-
-        .btn:hover, .btn.active {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
-        }
-
-        .btn.active {
-            background: rgba(78, 205, 196, 0.3);
-            border-color: #4ecdc4;
         }
 
         .loading {
@@ -262,12 +216,35 @@
             color: rgba(255, 255, 255, 0.7);
         }
 
+        .battery-low {
+            background: rgba(255, 107, 107, 0.2) !important;
+        }
+
+        .battery-medium {
+            background: rgba(254, 202, 87, 0.2) !important;
+        }
+
+        .battery-good {
+            background: rgba(46, 213, 115, 0.2) !important;
+        }
+
         @media (max-width: 768px) {
             .header h1 { font-size: 2rem; }
             .cards-grid { grid-template-columns: 1fr; }
-            .sensors-grid { grid-template-columns: 1fr 1fr; }
-            .power-grid { grid-template-columns: 1fr 1fr; }
-            .chart-controls { flex-wrap: wrap; }
+            .sensors-grid { grid-template-columns: 1fr 1fr 1fr; }
+        }
+
+        @media (max-width: 480px) {
+            .sensors-grid { 
+                grid-template-columns: 1fr; 
+                gap: 8px;
+            }
+            .sensor-item {
+                padding: 12px 8px;
+            }
+            .sensor-value {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -275,7 +252,7 @@
     <div class="container">
         <div class="header">
             <h1>Dashboard Monitoring <span class="status-indicator" id="connectionStatus"></span></h1>
-            <p>Real-time monitoring sensor environment dengan Supabase</p>
+            <p>Real-time monitoring kadar gas beracun</p>
         </div>
 
         <div id="debugInfo" class="debug-info" style="display: none;"></div>
@@ -286,13 +263,7 @@
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">Grafik Monitoring Sensor Environment</div>
-            <div class="chart-controls">
-                <button class="btn active" onclick="setPeriod('1h')">1 Jam</button>
-                <button class="btn" onclick="setPeriod('6h')">6 Jam</button>
-                <button class="btn" onclick="setPeriod('24h')">24 Jam</button>
-                <button class="btn" onclick="setPeriod('7d')">7 Hari</button>
-            </div>
+            <div class="chart-title">Grafik Monitoring 24 Jam Terakhir</div>
             <canvas id="sensorChart" width="400" height="200"></canvas>
         </div>
 
@@ -307,7 +278,6 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let chart;
-        let currentPeriod = '1h';
         let sensorData = [];
         let isConnected = false;
 
@@ -336,12 +306,6 @@
         async function loadSensorData() {
             try {
                 showDebug('Memuat data dari tabel: sensor_data_complete');
-                
-                // First, let's check what tables are available
-                const { data: tables, error: tablesError } = await supabase.rpc('get_table_names');
-                if (tablesError) {
-                    console.log('Cannot get table names, proceeding with query...');
-                }
 
                 const { data, error } = await supabase
                     .from('sensor_data_complete')
@@ -430,6 +394,13 @@
             return Math.min(100, Math.max(0, Math.round(((voltage - minVolt) / (maxVolt - minVolt)) * 100)));
         }
 
+        // Get battery status class
+        function getBatteryStatusClass(batteryPercent) {
+            if (batteryPercent <= 20) return 'battery-low';
+            if (batteryPercent <= 50) return 'battery-medium';
+            return 'battery-good';
+        }
+
         // Render node cards
         function renderCards() {
             const cardsGrid = document.getElementById('cardsGrid');
@@ -452,11 +423,7 @@
                 
                 // Calculate battery percentage from voltage
                 const batteryPercent = calculateBatteryPercent(device.voltage);
-                
-                // Format gateway info
-                const gatewayInfo = device.gateway_id ? 
-                    `Gateway: ${device.gateway_id}<br>RSSI: ${device.gateway_rssi || 'N/A'} dBm<br>SNR: ${device.gateway_snr || 'N/A'} dB` : 
-                    'Gateway: N/A';
+                const batteryStatusClass = getBatteryStatusClass(batteryPercent);
                 
                 card.innerHTML = `
                     <div class="node-label">${device.device_id}</div>
@@ -478,68 +445,24 @@
                             <div class="sensor-value">${device.h2s_ppm || 0}</div>
                             <div class="sensor-unit">ppm</div>
                         </div>
-                        <div class="sensor-item">
-                            <div class="sensor-label">Voltage</div>
-                            <div class="sensor-value">${device.voltage ? device.voltage.toFixed(2) : 0}</div>
-                            <div class="sensor-unit">V</div>
-                        </div>
-                        <div class="sensor-item">
+                        <div class="sensor-item ${batteryStatusClass}">
                             <div class="sensor-label">Battery</div>
                             <div class="sensor-value">${batteryPercent}</div>
                             <div class="sensor-unit">%</div>
                         </div>
                     </div>
-                    <div class="power-grid">
-                        <div class="sensor-item">
-                            <div class="sensor-label">Current</div>
-                            <div class="sensor-value">${device.current ? device.current.toFixed(3) : 0}</div>
-                            <div class="sensor-unit">A</div>
-                        </div>
-                        <div class="sensor-item">
-                            <div class="sensor-label">Power</div>
-                            <div class="sensor-value">${device.power ? device.power.toFixed(2) : 0}</div>
-                            <div class="sensor-unit">W</div>
-                        </div>
-                        <div class="sensor-item">
-                            <div class="sensor-label">GW RSSI</div>
-                            <div class="sensor-value">${device.gateway_rssi || 'N/A'}</div>
-                            <div class="sensor-unit">dBm</div>
-                        </div>
-                    </div>
-                    <div class="gateway-info">
-                        <div class="gateway-label">Gateway Info</div>
-                        <div>${gatewayInfo}</div>
-                    </div>
                     <div class="timestamp-info">
-                        Received: ${formatTimestamp(device.received_at)}<br>
-                        Created: ${formatTimestamp(device.created_at)}
+                        Terakhir update: ${formatTimestamp(device.created_at)}
                     </div>
                 `;
                 cardsGrid.appendChild(card);
             });
         }
 
-        // Filter data by time period
-        function filterDataByPeriod(data, period) {
+        // Filter data for last 24 hours
+        function filterLast24Hours(data) {
             const now = new Date();
-            let startTime;
-            
-            switch (period) {
-                case '1h':
-                    startTime = new Date(now.getTime() - 60 * 60 * 1000);
-                    break;
-                case '6h':
-                    startTime = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-                    break;
-                case '24h':
-                    startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-                    break;
-                case '7d':
-                    startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                    break;
-                default:
-                    startTime = new Date(now.getTime() - 60 * 60 * 1000);
-            }
+            const startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             
             return data.filter(record => new Date(record.created_at) >= startTime);
         }
@@ -601,11 +524,11 @@
             });
         }
 
-        // Update chart data
+        // Update chart data (always 24 hours)
         function updateChart() {
             if (!chart || sensorData.length === 0) return;
 
-            const filteredData = filterDataByPeriod(sensorData, currentPeriod);
+            const filteredData = filterLast24Hours(sensorData);
             const deviceIds = [...new Set(filteredData.map(d => d.device_id))].sort();
             
             // Group data by device
@@ -656,28 +579,18 @@
             if (deviceIds.length > 0 && deviceData[deviceIds[0]]) {
                 labels = deviceData[deviceIds[0]].map(d => {
                     const date = new Date(d.created_at);
-                    if (currentPeriod === '7d') {
-                        return date.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
-                    } else {
-                        return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-                    }
+                    return date.toLocaleTimeString('id-ID', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        month: 'short',
+                        day: 'numeric'
+                    });
                 });
             }
 
             chart.data.labels = labels;
             chart.data.datasets = datasets;
             chart.update();
-        }
-
-        // Set time period
-        function setPeriod(period) {
-            currentPeriod = period;
-            
-            // Update active button
-            document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            updateChart();
         }
 
         // Update last update time
