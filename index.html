@@ -252,6 +252,16 @@
             margin-top: 20px;
         }
 
+        .debug-info {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
         @media (max-width: 768px) {
             .header h1 { font-size: 2rem; }
             .cards-grid { grid-template-columns: 1fr; }
@@ -265,9 +275,10 @@
     <div class="container">
         <div class="header">
             <h1>Dashboard Monitoring <span class="status-indicator" id="connectionStatus"></span></h1>
-            <p>Real-time monitoring kadar gas beracun </p>
+            <p>Real-time monitoring sensor environment dengan Supabase</p>
         </div>
 
+        <div id="debugInfo" class="debug-info" style="display: none;"></div>
         <div id="errorMessage" class="error" style="display: none;"></div>
         
         <div class="cards-grid" id="cardsGrid">
@@ -291,7 +302,7 @@
     <script>
         // Supabase configuration
         const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU5MzI3MTYsImV4cCI6MjA1MTUwODcxNn0.L1BjZaGZ9UNUmxoTRwrUfRhzJiZOhY7ksRMvKiJxPOU';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -300,39 +311,68 @@
         let sensorData = [];
         let isConnected = false;
 
+        // Debug function
+        function showDebug(message) {
+            const debugEl = document.getElementById('debugInfo');
+            debugEl.innerHTML = message;
+            debugEl.style.display = 'block';
+            console.log('DEBUG:', message);
+        }
+
         // Initialize dashboard
         async function init() {
             try {
+                showDebug('Menginisialisasi dashboard...');
                 await loadSensorData();
                 initChart();
                 setInterval(loadSensorData, 30000); // Update every 30 seconds
             } catch (error) {
                 showError('Gagal menginisialisasi dashboard: ' + error.message);
+                console.error('Init error:', error);
             }
         }
 
         // Load sensor data from Supabase
         async function loadSensorData() {
             try {
+                showDebug('Memuat data dari tabel: sensor_data_complete');
+                
+                // First, let's check what tables are available
+                const { data: tables, error: tablesError } = await supabase.rpc('get_table_names');
+                if (tablesError) {
+                    console.log('Cannot get table names, proceeding with query...');
+                }
+
                 const { data, error } = await supabase
                     .from('sensor_data_complete')
                     .select('*')
                     .order('created_at', { ascending: false });
 
-                if (error) throw error;
+                if (error) {
+                    showDebug(`Error detail: ${error.message}<br>Code: ${error.code}<br>Details: ${error.details}`);
+                    throw error;
+                }
 
+                showDebug(`Data berhasil dimuat: ${data.length} records`);
                 sensorData = data;
                 updateConnectionStatus(true);
                 renderCards();
                 updateChart();
                 updateLastUpdateTime();
                 hideError();
+                hideDebug();
 
             } catch (error) {
                 console.error('Error loading data:', error);
                 updateConnectionStatus(false);
-                showError('Gagal memuat data sensor: ' + error.message);
+                showError(`Gagal memuat data sensor: ${error.message}`);
+                showDebug(`Full error: ${JSON.stringify(error, null, 2)}`);
             }
+        }
+
+        // Hide debug info
+        function hideDebug() {
+            document.getElementById('debugInfo').style.display = 'none';
         }
 
         // Update connection status
@@ -370,6 +410,7 @@
 
         // Format timestamp
         function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
             const date = new Date(timestamp);
             return date.toLocaleString('id-ID', {
                 day: '2-digit',
@@ -470,7 +511,7 @@
                         <div>${gatewayInfo}</div>
                     </div>
                     <div class="timestamp-info">
-                        Received: ${device.received_at ? formatTimestamp(device.received_at) : 'N/A'}<br>
+                        Received: ${formatTimestamp(device.received_at)}<br>
                         Created: ${formatTimestamp(device.created_at)}
                     </div>
                 `;
