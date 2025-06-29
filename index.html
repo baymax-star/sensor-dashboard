@@ -214,6 +214,17 @@
             color: #2980b9;
         }
 
+        .chart-controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .data-count {
+            color: #5a6c7d;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
         .loading {
             text-align: center;
             padding: 50px;
@@ -301,7 +312,6 @@
             .chart-container { padding: 25px; }
         }
 
-        /* Subtle animations */
         .node-card, .sensor-item, .chart-container, .header {
             animation: fadeInUp 0.6s ease-out;
         }
@@ -317,7 +327,6 @@
             }
         }
 
-        /* Chart styling improvements */
         canvas {
             border-radius: 10px;
         }
@@ -326,7 +335,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1> Dashboard Monitoring <span class="status-indicator" id="connectionStatus"></span></h1>
+            <h1>Dashboard Monitoring <span class="status-indicator" id="connectionStatus"></span></h1>
             <p>Real-time monitoring kadar gas beracun</p>
         </div>
 
@@ -339,6 +348,9 @@
 
         <div class="chart-container">
             <div class="chart-title">📊 Grafik Monitoring 24 Jam Terakhir</div>
+            <div class="chart-controls">
+                <div class="data-count" id="dataCount">Memuat data...</div>
+            </div>
             <canvas id="sensorChart" width="400" height="200"></canvas>
         </div>
 
@@ -352,153 +364,204 @@
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        // Global variables
         let chart;
         let sensorData = [];
         let isConnected = false;
+        let updateInterval;
 
-        // Debug function
-        function showDebug(message) {
-            const debugEl = document.getElementById('debugInfo');
-            debugEl.innerHTML = message;
-            debugEl.style.display = 'block';
-            console.log('DEBUG:', message);
-        }
+        // Constants
+        const UPDATE_INTERVAL = 30000; // 30 seconds
+        const HOURS_24 = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
-        // Initialize dashboard
-        async function init() {
-            try {
-                showDebug('Menginisialisasi dashboard...');
-                await loadSensorData();
-                initChart();
-                setInterval(loadSensorData, 30000); // Update every 30 seconds
-            } catch (error) {
-                showError('Gagal menginisialisasi dashboard: ' + error.message);
-                console.error('Init error:', error);
+        // Utility functions
+        const utils = {
+            getCurrentTimestamp: () => new Date(),
+            
+            get24HoursAgo: () => new Date(Date.now() - HOURS_24),
+            
+            formatTimestamp: (timestamp) => {
+                if (!timestamp) return 'N/A';
+                return new Date(timestamp).toLocaleString('id-ID', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            },
+
+            formatChartLabel: (timestamp) => {
+                const date = new Date(timestamp);
+                return date.toLocaleTimeString('id-ID', { 
+                    hour: '2-digit', 
+                    minute: '2-digit'
+                });
+            },
+
+            calculateBatteryPercent: (voltage) => {
+                if (!voltage) return 0;
+                const minVolt = 2.5;
+                const maxVolt = 3.3;
+                return Math.min(100, Math.max(0, Math.round(((voltage - minVolt) / (maxVolt - minVolt)) * 100)));
+            },
+
+            getBatteryStatusClass: (batteryPercent) => {
+                if (batteryPercent <= 20) return 'battery-low';
+                if (batteryPercent <= 50) return 'battery-medium';
+                return 'battery-good';
+            },
+
+            debounce: (func, wait) => {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
             }
-        }
+        };
 
-        // Load sensor data from Supabase
+        // Debug and error handling
+        const debug = {
+            show: (message) => {
+                const debugEl = document.getElementById('debugInfo');
+                debugEl.innerHTML = `${utils.formatTimestamp(new Date())}: ${message}`;
+                debugEl.style.display = 'block';
+                console.log('DEBUG:', message);
+            },
+
+            hide: () => {
+                document.getElementById('debugInfo').style.display = 'none';
+            }
+        };
+
+        const errorHandler = {
+            show: (message) => {
+                const errorEl = document.getElementById('errorMessage');
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+                console.error('ERROR:', message);
+            },
+
+            hide: () => {
+                document.getElementById('errorMessage').style.display = 'none';
+            }
+        };
+
+        // Data management
+        const dataManager = {
+            filterLast24Hours: (data) => {
+                const startTime = utils.get24HoursAgo();
+                return data.filter(record => new Date(record.created_at) >= startTime);
+            },
+
+            getLatestDataByDevice: (data) => {
+                const deviceData = new Map();
+                
+                data.forEach(record => {
+                    const deviceId = record.device_id;
+                    const existing = deviceData.get(deviceId);
+                    
+                    if (!existing || new Date(record.created_at) > new Date(existing.created_at)) {
+                        deviceData.set(deviceId, record);
+                    }
+                });
+                
+                return Array.from(deviceData.values());
+            },
+
+            groupByDevice: (data) => {
+                const grouped = new Map();
+                
+                data.forEach(record => {
+                    const deviceId = record.device_id;
+                    if (!grouped.has(deviceId)) {
+                        grouped.set(deviceId, []);
+                    }
+                    grouped.get(deviceId).push(record);
+                });
+
+                // Sort each device's data by timestamp
+                grouped.forEach((records, deviceId) => {
+                    records.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                });
+                
+                return grouped;
+            }
+        };
+
+        // Connection management
+        const connectionManager = {
+            updateStatus: (connected) => {
+                isConnected = connected;
+                const statusEl = document.getElementById('connectionStatus');
+                statusEl.className = 'status-indicator ' + (connected ? 'connected' : '');
+            }
+        };
+
+        // Data loading
         async function loadSensorData() {
             try {
-                showDebug('Memuat data dari tabel: sensor_data_complete');
+                debug.show('Memuat data sensor dari database...');
+
+                // Only fetch data from last 24 hours to improve performance
+                const startTime = utils.get24HoursAgo().toISOString();
 
                 const { data, error } = await supabase
                     .from('sensor_data_complete')
                     .select('*')
+                    .gte('created_at', startTime)
                     .order('created_at', { ascending: false });
 
                 if (error) {
-                    showDebug(`Error detail: ${error.message}<br>Code: ${error.code}<br>Details: ${error.details}`);
-                    throw error;
+                    throw new Error(`Database error: ${error.message}`);
                 }
 
-                showDebug(`Data berhasil dimuat: ${data.length} records`);
+                debug.show(`Data berhasil dimuat: ${data.length} records (24 jam terakhir)`);
+                
+                // Store filtered data
                 sensorData = data;
-                updateConnectionStatus(true);
+                
+                connectionManager.updateStatus(true);
                 renderCards();
                 updateChart();
                 updateLastUpdateTime();
-                hideError();
-                hideDebug();
+                updateDataCount();
+                errorHandler.hide();
+                debug.hide();
 
             } catch (error) {
                 console.error('Error loading data:', error);
-                updateConnectionStatus(false);
-                showError(`Gagal memuat data sensor: ${error.message}`);
-                showDebug(`Full error: ${JSON.stringify(error, null, 2)}`);
+                connectionManager.updateStatus(false);
+                errorHandler.show(`Gagal memuat data sensor: ${error.message}`);
+                debug.show(`Error: ${error.message}`);
             }
         }
 
-        // Hide debug info
-        function hideDebug() {
-            document.getElementById('debugInfo').style.display = 'none';
-        }
-
-        // Update connection status
-        function updateConnectionStatus(connected) {
-            isConnected = connected;
-            const statusEl = document.getElementById('connectionStatus');
-            statusEl.className = 'status-indicator ' + (connected ? 'connected' : '');
-        }
-
-        // Show error message
-        function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message;
-            errorEl.style.display = 'block';
-        }
-
-        // Hide error message
-        function hideError() {
-            document.getElementById('errorMessage').style.display = 'none';
-        }
-
-        // Group data by device_id for cards
-        function getLatestDataByDevice() {
-            const deviceData = {};
-            
-            sensorData.forEach(record => {
-                if (!deviceData[record.device_id] || 
-                    new Date(record.created_at) > new Date(deviceData[record.device_id].created_at)) {
-                    deviceData[record.device_id] = record;
-                }
-            });
-            
-            return Object.values(deviceData);
-        }
-
-        // Format timestamp
-        function formatTimestamp(timestamp) {
-            if (!timestamp) return 'N/A';
-            const date = new Date(timestamp);
-            return date.toLocaleString('id-ID', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-
-        // Calculate battery percentage from voltage
-        function calculateBatteryPercent(voltage) {
-            if (!voltage) return 0;
-            // Assuming 3.3V = 100%, 2.5V = 0%
-            const minVolt = 2.5;
-            const maxVolt = 3.3;
-            return Math.min(100, Math.max(0, Math.round(((voltage - minVolt) / (maxVolt - minVolt)) * 100)));
-        }
-
-        // Get battery status class
-        function getBatteryStatusClass(batteryPercent) {
-            if (batteryPercent <= 20) return 'battery-low';
-            if (batteryPercent <= 50) return 'battery-medium';
-            return 'battery-good';
-        }
-
-        // Render node cards
+        // Card rendering
         function renderCards() {
             const cardsGrid = document.getElementById('cardsGrid');
-            const latestData = getLatestDataByDevice();
+            const latestData = dataManager.getLatestDataByDevice(sensorData);
             
             if (latestData.length === 0) {
-                cardsGrid.innerHTML = '<div class="loading">Tidak ada data sensor tersedia</div>';
+                cardsGrid.innerHTML = '<div class="loading">Tidak ada data sensor tersedia dalam 24 jam terakhir</div>';
                 return;
             }
 
-            cardsGrid.innerHTML = '';
+            const fragment = document.createDocumentFragment();
 
-            latestData.forEach((device, index) => {
+            latestData.forEach((device) => {
                 const card = document.createElement('div');
                 card.className = 'node-card';
                 
-                // Get device info
                 const deviceName = `Node ${device.device_id}`;
                 const location = `Sensor ${device.device_id}`;
-                
-                // Calculate battery percentage from voltage
-                const batteryPercent = calculateBatteryPercent(device.voltage);
-                const batteryStatusClass = getBatteryStatusClass(batteryPercent);
+                const batteryPercent = utils.calculateBatteryPercent(device.voltage);
+                const batteryStatusClass = utils.getBatteryStatusClass(batteryPercent);
                 
                 card.innerHTML = `
                     <div class="node-label">${device.device_id}</div>
@@ -527,22 +590,17 @@
                         </div>
                     </div>
                     <div class="timestamp-info">
-                        Terakhir update: ${formatTimestamp(device.created_at)}
+                        Terakhir update: ${utils.formatTimestamp(device.created_at)}
                     </div>
                 `;
-                cardsGrid.appendChild(card);
+                fragment.appendChild(card);
             });
+
+            cardsGrid.innerHTML = '';
+            cardsGrid.appendChild(fragment);
         }
 
-        // Filter data for last 24 hours
-        function filterLast24Hours(data) {
-            const now = new Date();
-            const startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            
-            return data.filter(record => new Date(record.created_at) >= startTime);
-        }
-
-        // Initialize chart
+        // Chart management
         function initChart() {
             const ctx = document.getElementById('sensorChart').getContext('2d');
             
@@ -572,19 +630,39 @@
                             titleColor: 'white',
                             bodyColor: 'white',
                             borderColor: '#74b9ff',
-                            borderWidth: 1
+                            borderWidth: 1,
+                            callbacks: {
+                                title: function(context) {
+                                    return `Waktu: ${context[0].label}`;
+                                }
+                            }
                         }
                     },
                     scales: {
                         x: {
-                            ticks: { color: '#5a6c7d', maxTicksLimit: 12, font: { size: 11 } },
+                            title: { 
+                                display: true, 
+                                text: 'Waktu (24 Jam Terakhir)', 
+                                color: '#2980b9', 
+                                font: { weight: '600' } 
+                            },
+                            ticks: { 
+                                color: '#5a6c7d', 
+                                maxTicksLimit: 8, 
+                                font: { size: 11 } 
+                            },
                             grid: { color: 'rgba(116, 185, 255, 0.1)' }
                         },
                         y: {
                             type: 'linear',
                             display: true,
                             position: 'left',
-                            title: { display: true, text: 'CO₂ (ppm)', color: '#2980b9', font: { weight: '600' } },
+                            title: { 
+                                display: true, 
+                                text: 'CO₂ (ppm)', 
+                                color: '#2980b9', 
+                                font: { weight: '600' } 
+                            },
                             ticks: { color: '#5a6c7d', font: { size: 11 } },
                             grid: { color: 'rgba(116, 185, 255, 0.1)' }
                         },
@@ -592,7 +670,12 @@
                             type: 'linear',
                             display: true,
                             position: 'right',
-                            title: { display: true, text: 'H₂S (ppm)', color: '#2980b9', font: { weight: '600' } },
+                            title: { 
+                                display: true, 
+                                text: 'H₂S (ppm)', 
+                                color: '#2980b9', 
+                                font: { weight: '600' } 
+                            },
                             ticks: { color: '#5a6c7d', font: { size: 11 } },
                             grid: { drawOnChartArea: false }
                         }
@@ -601,35 +684,45 @@
             });
         }
 
-        // Update chart data (always 24 hours)
         function updateChart() {
-            if (!chart || sensorData.length === 0) return;
+            if (!chart || sensorData.length === 0) {
+                document.getElementById('dataCount').textContent = 'Tidak ada data untuk ditampilkan';
+                return;
+            }
 
-            const filteredData = filterLast24Hours(sensorData);
-            const deviceIds = [...new Set(filteredData.map(d => d.device_id))].sort();
-            
-            // Group data by device
-            const deviceData = {};
-            deviceIds.forEach(id => {
-                deviceData[id] = filteredData
-                    .filter(d => d.device_id === id)
-                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            });
+            // Data is already filtered to 24 hours when loaded
+            const filteredData = sensorData;
+            const deviceGroups = dataManager.groupByDevice(filteredData);
+            const deviceIds = Array.from(deviceGroups.keys()).sort();
 
-            // Prepare datasets with soft blue theme colors
-            const datasets = [];
+            if (deviceIds.length === 0) {
+                document.getElementById('dataCount').textContent = 'Tidak ada data dalam 24 jam terakhir';
+                return;
+            }
+
+            // Color schemes
             const co2Colors = ['#74b9ff', '#0984e3', '#00b894', '#00cec9', '#6c5ce7', '#a29bfe'];
             const h2sColors = ['#fd79a8', '#e84393', '#ff7675', '#e17055', '#fdcb6e', '#f39c12'];
 
+            const datasets = [];
+            let allLabels = new Set();
+
+            // Create datasets for each device
             deviceIds.forEach((deviceId, index) => {
-                const data = deviceData[deviceId];
+                const deviceData = deviceGroups.get(deviceId);
                 
-                if (data.length === 0) return;
+                if (deviceData.length === 0) return;
+
+                // Add labels to set
+                deviceData.forEach(d => allLabels.add(utils.formatChartLabel(d.created_at)));
 
                 // CO2 dataset
                 datasets.push({
                     label: `${deviceId} CO₂`,
-                    data: data.map(d => d.co2_ppm || 0),
+                    data: deviceData.map(d => ({
+                        x: utils.formatChartLabel(d.created_at),
+                        y: d.co2_ppm || 0
+                    })),
                     borderColor: co2Colors[index % co2Colors.length],
                     backgroundColor: co2Colors[index % co2Colors.length] + '20',
                     borderWidth: 3,
@@ -645,7 +738,10 @@
                 // H2S dataset
                 datasets.push({
                     label: `${deviceId} H₂S`,
-                    data: data.map(d => d.h2s_ppm || 0),
+                    data: deviceData.map(d => ({
+                        x: utils.formatChartLabel(d.created_at),
+                        y: d.h2s_ppm || 0
+                    })),
                     borderColor: h2sColors[index % h2sColors.length],
                     backgroundColor: h2sColors[index % h2sColors.length] + '20',
                     borderWidth: 3,
@@ -659,34 +755,82 @@
                 });
             });
 
-            // Generate labels from the most recent device data
-            let labels = [];
-            if (deviceIds.length > 0 && deviceData[deviceIds[0]]) {
-                labels = deviceData[deviceIds[0]].map(d => {
-                    const date = new Date(d.created_at);
-                    return date.toLocaleTimeString('id-ID', { 
-                        hour: '2-digit', 
-                        minute: '2-digit',
-                        month: 'short',
-                        day: 'numeric'
-                    });
-                });
-            }
+            // Convert set to sorted array
+            const labels = Array.from(allLabels).sort();
 
             chart.data.labels = labels;
             chart.data.datasets = datasets;
-            chart.update();
+            chart.update('none'); // Use 'none' for better performance
+
+            // Update data count
+            document.getElementById('dataCount').textContent = 
+                `Menampilkan ${filteredData.length} data dari ${deviceIds.length} sensor (24 jam terakhir)`;
         }
 
-        // Update last update time
+        function updateDataCount() {
+            const count = sensorData.length;
+            const deviceCount = new Set(sensorData.map(d => d.device_id)).size;
+            document.getElementById('dataCount').textContent = 
+                `${count} data dari ${deviceCount} sensor dalam 24 jam terakhir`;
+        }
+
         function updateLastUpdateTime() {
             const lastUpdateEl = document.getElementById('lastUpdate');
-            const now = new Date();
-            lastUpdateEl.textContent = `Terakhir diperbarui: ${now.toLocaleString('id-ID')}`;
+            lastUpdateEl.textContent = `Terakhir diperbarui: ${utils.formatTimestamp(utils.getCurrentTimestamp())}`;
         }
 
-        // Start when page loads
+        // Debounced update function for better performance
+        const debouncedUpdate = utils.debounce(loadSensorData, 1000);
+
+        // Initialize dashboard
+        async function init() {
+            try {
+                debug.show('Inisialisasi dashboard...');
+                
+                // Initialize chart first
+                initChart();
+                
+                // Load initial data
+                await loadSensorData();
+                
+                // Set up periodic updates
+                updateInterval = setInterval(loadSensorData, UPDATE_INTERVAL);
+                
+                debug.show('Dashboard berhasil diinisialisasi');
+                
+            } catch (error) {
+                errorHandler.show('Gagal menginisialisasi dashboard: ' + error.message);
+                console.error('Init error:', error);
+            }
+        }
+
+        // Cleanup function
+        function cleanup() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+            if (chart) {
+                chart.destroy();
+            }
+        }
+
+        // Event listeners
         window.addEventListener('load', init);
+        window.addEventListener('beforeunload', cleanup);
+
+        // Handle visibility change to pause/resume updates when tab is not visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (updateInterval) {
+                    clearInterval(updateInterval);
+                }
+            } else {
+                // Resume updates when tab becomes visible
+                updateInterval = setInterval(loadSensorData, UPDATE_INTERVAL);
+                // Immediately update data
+                debouncedUpdate();
+            }
+        });
     </script>
 </body>
 </html>
