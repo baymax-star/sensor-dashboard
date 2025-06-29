@@ -160,6 +160,40 @@
             color: #2980b9;
         }
         
+        .chart-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .control-group label {
+            font-size: 0.9rem;
+            color: #5a6c7d;
+            font-weight: 500;
+        }
+        
+        .control-group select, .control-group button {
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #2980b9;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        
+        .control-group button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
         .data-count {
             color: #5a6c7d;
             font-size: 0.9rem;
@@ -203,6 +237,7 @@
             .header h1 { font-size: 1.8rem; }
             .cards-grid { grid-template-columns: 1fr; }
             .sensors-grid { grid-template-columns: 1fr 1fr 1fr; }
+            .chart-controls { flex-direction: column; align-items: center; }
         }
         
         @media (max-width: 480px) {
@@ -227,8 +262,47 @@
 
         <div class="chart-container">
             <div class="chart-title">📊 Grafik Monitoring 24 Jam Terakhir</div>
+            
+            <div class="chart-controls">
+                <div class="control-group">
+                    <label>Tampilan:</label>
+                    <select id="viewModeSelect">
+                        <option value="combined">Gabungan</option>
+                        <option value="separated" selected>Terpisah</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Interval:</label>
+                    <select id="intervalSelect">
+                        <option value="5">5 Menit</option>
+                        <option value="15" selected>15 Menit</option>
+                        <option value="30">30 Menit</option>
+                        <option value="60">1 Jam</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <button onclick="toggleSmoothing()" id="smoothingBtn">Enable Smoothing</button>
+                </div>
+            </div>
+            
             <div class="data-count" id="dataCount">Memuat data...</div>
-            <canvas id="sensorChart" width="400" height="200"></canvas>
+            
+            <!-- Combined Chart -->
+            <div id="combinedChart" style="display: none;">
+                <canvas id="sensorChart" width="400" height="200"></canvas>
+            </div>
+            
+            <!-- Separated Charts -->
+            <div id="separatedCharts">
+                <div style="margin-bottom: 30px;">
+                    <h4 style="text-align: center; color: #2980b9; margin-bottom: 15px;">CO₂ Levels (ppm)</h4>
+                    <canvas id="co2Chart" width="400" height="150"></canvas>
+                </div>
+                <div>
+                    <h4 style="text-align: center; color: #2980b9; margin-bottom: 15px;">H₂S Levels (ppm)</h4>
+                    <canvas id="h2sChart" width="400" height="150"></canvas>
+                </div>
+            </div>
         </div>
 
         <div class="last-update" id="lastUpdate"></div>
@@ -243,8 +317,11 @@
 
         // Global variables
         let chart;
+        let co2Chart;
+        let h2sChart;
         let sensorData = [];
         let updateInterval;
+        let smoothingEnabled = false;
 
         // Utility functions
         function formatTimestamp(timestamp) {
@@ -287,6 +364,62 @@
 
         function hideError() {
             document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        // Data processing functions
+        function aggregateData(data, intervalMinutes) {
+            const grouped = new Map();
+            
+            data.forEach(record => {
+                const time = new Date(record.created_at);
+                const roundedTime = new Date(
+                    time.getFullYear(),
+                    time.getMonth(),
+                    time.getDate(),
+                    time.getHours(),
+                    Math.floor(time.getMinutes() / intervalMinutes) * intervalMinutes
+                );
+                
+                const key = `${record.device_id}-${roundedTime.toISOString()}`;
+                
+                if (!grouped.has(key)) {
+                    grouped.set(key, {
+                        device_id: record.device_id,
+                        created_at: roundedTime.toISOString(),
+                        co2_values: [],
+                        h2s_values: [],
+                        voltage_values: []
+                    });
+                }
+                
+                const group = grouped.get(key);
+                if (record.co2_ppm !== null) group.co2_values.push(record.co2_ppm);
+                if (record.h2s_ppm !== null) group.h2s_values.push(record.h2s_ppm);
+                if (record.voltage !== null) group.voltage_values.push(record.voltage);
+            });
+            
+            return Array.from(grouped.values()).map(group => ({
+                device_id: group.device_id,
+                created_at: group.created_at,
+                co2_ppm: group.co2_values.length > 0 ? 
+                    Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length) : 0,
+                h2s_ppm: group.h2s_values.length > 0 ? 
+                    Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100 : 0,
+                voltage: group.voltage_values.length > 0 ? 
+                    Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100 : 0
+            })).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        }
+
+        function applySmoothing(data, windowSize = 3) {
+            if (data.length < windowSize || !smoothingEnabled) return data;
+            
+            const smoothed = [...data];
+            for (let i = Math.floor(windowSize / 2); i < data.length - Math.floor(windowSize / 2); i++) {
+                const window = data.slice(i - Math.floor(windowSize / 2), i + Math.floor(windowSize / 2) + 1);
+                smoothed[i].co2_ppm = Math.round(window.reduce((sum, item) => sum + item.co2_ppm, 0) / window.length);
+                smoothed[i].h2s_ppm = Math.round((window.reduce((sum, item) => sum + item.h2s_ppm, 0) / window.length) * 100) / 100;
+            }
+            return smoothed;
         }
 
         // Data loading
@@ -410,7 +543,7 @@
                     scales: {
                         x: {
                             title: { display: true, text: 'Waktu (24 Jam)', color: '#2980b9' },
-                            ticks: { color: '#5a6c7d', maxTicksLimit: 8 },
+                            ticks: { color: '#5a6c7d', maxTicksLimit: 12 },
                             grid: { color: 'rgba(116, 185, 255, 0.1)' }
                         },
                         y: {
@@ -430,13 +563,100 @@
             });
         }
 
+        function initSeparatedCharts() {
+            const co2Ctx = document.getElementById('co2Chart').getContext('2d');
+            const h2sCtx = document.getElementById('h2sChart').getContext('2d');
+            
+            const baseOptions = {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        labels: { 
+                            color: '#2c3e50', 
+                            font: { size: 11, weight: '500' },
+                            usePointStyle: true,
+                            padding: 12
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(44, 62, 80, 0.9)',
+                        titleColor: 'white',
+                        bodyColor: 'white',
+                        borderColor: '#74b9ff',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Waktu', color: '#2980b9', font: { size: 11 } },
+                        ticks: { color: '#5a6c7d', maxTicksLimit: 10, font: { size: 10 } },
+                        grid: { color: 'rgba(116, 185, 255, 0.1)' }
+                    },
+                    y: {
+                        ticks: { color: '#5a6c7d', font: { size: 10 } },
+                        grid: { color: 'rgba(116, 185, 255, 0.1)' }
+                    }
+                }
+            };
+
+            co2Chart = new Chart(co2Ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    ...baseOptions,
+                    scales: {
+                        ...baseOptions.scales,
+                        y: {
+                            ...baseOptions.scales.y,
+                            title: { display: true, text: 'CO₂ (ppm)', color: '#2980b9', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+
+            h2sChart = new Chart(h2sCtx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    ...baseOptions,
+                    scales: {
+                        ...baseOptions.scales,
+                        y: {
+                            ...baseOptions.scales.y,
+                            title: { display: true, text: 'H₂S (ppm)', color: '#2980b9', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
         function updateChart() {
-            if (!chart || sensorData.length === 0) {
+            if (sensorData.length === 0) {
                 document.getElementById('dataCount').textContent = 'Tidak ada data untuk ditampilkan';
                 return;
             }
 
-            const deviceGroups = groupByDevice(sensorData);
+            const intervalMinutes = parseInt(document.getElementById('intervalSelect').value);
+            const viewMode = document.getElementById('viewModeSelect').value;
+            
+            // Show/hide appropriate chart containers
+            if (viewMode === 'combined') {
+                document.getElementById('combinedChart').style.display = 'block';
+                document.getElementById('separatedCharts').style.display = 'none';
+                updateCombinedChart(intervalMinutes);
+            } else {
+                document.getElementById('combinedChart').style.display = 'none';
+                document.getElementById('separatedCharts').style.display = 'block';
+                updateSeparatedCharts(intervalMinutes);
+            }
+        }
+
+        function updateCombinedChart(intervalMinutes) {
+            if (!chart) return;
+            
+            const aggregatedData = aggregateData(sensorData, intervalMinutes);
+            const deviceGroups = groupByDevice(aggregatedData);
             const deviceIds = Array.from(deviceGroups.keys()).sort();
 
             if (deviceIds.length === 0) {
@@ -450,9 +670,10 @@
             let allLabels = new Set();
 
             deviceIds.forEach((deviceId, index) => {
-                const deviceData = deviceGroups.get(deviceId);
+                let deviceData = deviceGroups.get(deviceId);
                 if (deviceData.length === 0) return;
 
+                deviceData = applySmoothing(deviceData);
                 deviceData.forEach(d => allLabels.add(formatChartLabel(d.created_at)));
 
                 // CO2 dataset
@@ -464,11 +685,12 @@
                     })),
                     borderColor: co2Colors[index % co2Colors.length],
                     backgroundColor: co2Colors[index % co2Colors.length] + '20',
-                    borderWidth: 2,
+                    borderWidth: 3,
                     fill: false,
-                    tension: 0.4,
+                    tension: smoothingEnabled ? 0.4 : 0.1,
                     yAxisID: 'y',
-                    pointRadius: 3
+                    pointRadius: 2,
+                    pointHoverRadius: 5
                 });
 
                 // H2S dataset
@@ -480,11 +702,12 @@
                     })),
                     borderColor: h2sColors[index % h2sColors.length],
                     backgroundColor: h2sColors[index % h2sColors.length] + '20',
-                    borderWidth: 2,
+                    borderWidth: 3,
                     fill: false,
-                    tension: 0.4,
+                    tension: smoothingEnabled ? 0.4 : 0.1,
                     yAxisID: 'y1',
-                    pointRadius: 3
+                    pointRadius: 2,
+                    pointHoverRadius: 5
                 });
             });
 
@@ -494,7 +717,82 @@
             chart.update('none');
 
             document.getElementById('dataCount').textContent = 
-                `Menampilkan ${sensorData.length} data dari ${deviceIds.length} sensor (24 jam terakhir)`;
+                `Menampilkan ${aggregatedData.length} data point (interval ${intervalMinutes} menit) dari ${deviceIds.length} sensor`;
+        }
+
+        function updateSeparatedCharts(intervalMinutes) {
+            if (!co2Chart || !h2sChart) return;
+            
+            const aggregatedData = aggregateData(sensorData, intervalMinutes);
+            const deviceGroups = groupByDevice(aggregatedData);
+            const deviceIds = Array.from(deviceGroups.keys()).sort();
+
+            if (deviceIds.length === 0) {
+                document.getElementById('dataCount').textContent = 'Tidak ada data dalam 24 jam terakhir';
+                return;
+            }
+
+            const co2Colors = ['#74b9ff', '#0984e3', '#00b894', '#6c5ce7', '#fd79a8'];
+            const h2sColors = ['#fd79a8', '#e84393', '#ff7675', '#fdcb6e', '#74b9ff'];
+            
+            const co2Datasets = [];
+            const h2sDatasets = [];
+            let allLabels = new Set();
+
+            deviceIds.forEach((deviceId, index) => {
+                let deviceData = deviceGroups.get(deviceId);
+                if (deviceData.length === 0) return;
+
+                deviceData = applySmoothing(deviceData);
+                deviceData.forEach(d => allLabels.add(formatChartLabel(d.created_at)));
+
+                // CO2 dataset
+                co2Datasets.push({
+                    label: `${deviceId}`,
+                    data: deviceData.map(d => ({
+                        x: formatChartLabel(d.created_at),
+                        y: d.co2_ppm || 0
+                    })),
+                    borderColor: co2Colors[index % co2Colors.length],
+                    backgroundColor: co2Colors[index % co2Colors.length] + '20',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: smoothingEnabled ? 0.4 : 0.1,
+                    pointRadius: 3,
+                    pointHoverRadius: 6
+                });
+
+                // H2S dataset
+                h2sDatasets.push({
+                    label: `${deviceId}`,
+                    data: deviceData.map(d => ({
+                        x: formatChartLabel(d.created_at),
+                        y: d.h2s_ppm || 0
+                    })),
+                    borderColor: h2sColors[index % h2sColors.length],
+                    backgroundColor: h2sColors[index % h2sColors.length] + '20',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: smoothingEnabled ? 0.4 : 0.1,
+                    pointRadius: 3,
+                    pointHoverRadius: 6
+                });
+            });
+
+            const labels = Array.from(allLabels).sort();
+            
+            // Update CO2 chart
+            co2Chart.data.labels = labels;
+            co2Chart.data.datasets = co2Datasets;
+            co2Chart.update('none');
+            
+            // Update H2S chart
+            h2sChart.data.labels = labels;
+            h2sChart.data.datasets = h2sDatasets;
+            h2sChart.update('none');
+
+            document.getElementById('dataCount').textContent = 
+                `Menampilkan ${aggregatedData.length} data point (interval ${intervalMinutes} menit) dari ${deviceIds.length} sensor`;
         }
 
         function groupByDevice(data) {
@@ -519,10 +817,23 @@
                 `Terakhir diperbarui: ${formatTimestamp(new Date())}`;
         }
 
+        // Control functions
+        function toggleSmoothing() {
+            smoothingEnabled = !smoothingEnabled;
+            const btn = document.getElementById('smoothingBtn');
+            btn.textContent = smoothingEnabled ? 'Disable Smoothing' : 'Enable Smoothing';
+            updateChart();
+        }
+
+        // Event listeners
+        document.getElementById('viewModeSelect').addEventListener('change', updateChart);
+        document.getElementById('intervalSelect').addEventListener('change', updateChart);
+
         // Initialize dashboard
         async function init() {
             try {
                 initChart();
+                initSeparatedCharts();
                 await loadSensorData();
                 updateInterval = setInterval(loadSensorData, 30000); // Update every 30 seconds
             } catch (error) {
@@ -535,6 +846,8 @@
         window.addEventListener('beforeunload', () => {
             if (updateInterval) clearInterval(updateInterval);
             if (chart) chart.destroy();
+            if (co2Chart) co2Chart.destroy();
+            if (h2sChart) h2sChart.destroy();
         });
 
         // Handle tab visibility
