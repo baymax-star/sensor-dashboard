@@ -444,7 +444,7 @@
                 responsive: true,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { labels: { color: '#334155', font: { size: 11 }, usePointStyle: true } },
+                    legend: { labels: { color: '#334155', font: { size: 12, weight: 'bold' }, padding: 20, usePointStyle: true, pointStyle: 'line' } },
                     tooltip: { backgroundColor: 'rgba(30, 64, 175, 0.9)', titleColor: 'white', bodyColor: 'white' }
                 },
                 scales: {
@@ -506,7 +506,7 @@
 
             if (deviceIds.length === 0) return;
 
-            const colors = ['#3b82f6', '#06b6d4', '#10b981', '#8b5cf6'];
+            const colors = ['#e11d48', '#0ea5e9', '#22c55e', '#a855f7', '#f59e0b', '#ec4899'];
             const datasets = [];
             let allLabels = new Set();
 
@@ -518,23 +518,32 @@
                     label: `${deviceId} CO₂`,
                     data: deviceData.map(d => ({ x: formatChartLabel(d.created_at), y: d.co2_ppm || 0 })),
                     borderColor: colors[index % colors.length],
-                    borderWidth: 2,
+                    backgroundColor: colors[index % colors.length] + '20',
+                    borderWidth: 3,
                     fill: false,
                     tension: smoothingEnabled ? 0.4 : 0.1,
                     yAxisID: 'y',
-                    pointRadius: 2
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBorderWidth: 2,
+                    pointBackgroundColor: '#fff'
                 });
 
                 datasets.push({
                     label: `${deviceId} H₂S`,
                     data: deviceData.map(d => ({ x: formatChartLabel(d.created_at), y: d.h2s_ppm || 0 })),
                     borderColor: colors[index % colors.length],
-                    borderDash: [5, 5],
-                    borderWidth: 2,
+                    backgroundColor: colors[index % colors.length] + '20',
+                    borderDash: [8, 4],
+                    borderWidth: 3,
                     fill: false,
                     tension: smoothingEnabled ? 0.4 : 0.1,
                     yAxisID: 'y1',
-                    pointRadius: 2
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBorderWidth: 2,
+                    pointBackgroundColor: '#fff',
+                    pointStyle: 'rect'
                 });
             });
 
@@ -553,7 +562,7 @@
 
             if (deviceIds.length === 0) return;
 
-            const colors = ['#3b82f6', '#06b6d4', '#10b981', '#8b5cf6', '#f59e0b'];
+            const colors = ['#e11d48', '#0ea5e9', '#22c55e', '#a855f7', '#f59e0b', '#ec4899'];
             const co2Datasets = [], h2sDatasets = [];
             let allLabels = new Set();
 
@@ -565,20 +574,28 @@
                     label: `${deviceId}`,
                     data: deviceData.map(d => ({ x: formatChartLabel(d.created_at), y: d.co2_ppm || 0 })),
                     borderColor: colors[index % colors.length],
-                    borderWidth: 2,
-                    fill: false,
+                    backgroundColor: colors[index % colors.length] + '30',
+                    borderWidth: 3,
+                    fill: true,
                     tension: smoothingEnabled ? 0.4 : 0.1,
-                    pointRadius: 2
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBorderWidth: 2,
+                    pointBackgroundColor: '#fff'
                 });
 
                 h2sDatasets.push({
                     label: `${deviceId}`,
                     data: deviceData.map(d => ({ x: formatChartLabel(d.created_at), y: d.h2s_ppm || 0 })),
                     borderColor: colors[index % colors.length],
-                    borderWidth: 2,
-                    fill: false,
+                    backgroundColor: colors[index % colors.length] + '30',
+                    borderWidth: 3,
+                    fill: true,
                     tension: smoothingEnabled ? 0.4 : 0.1,
-                    pointRadius: 2
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBorderWidth: 2,
+                    pointBackgroundColor: '#fff'
                 });
             });
 
