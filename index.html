@@ -340,13 +340,13 @@
         const aggregateData = (data, intervalMinutes) => {
             const grouped = new Map();
             data.forEach(record => {
-                const time = new Date(record.created_at);
+                const time = new Date(record.received_at); // Changed from created_at to received_at
                 const roundedTime = new Date(time.getFullYear(), time.getMonth(), time.getDate(), 
                     time.getHours(), Math.floor(time.getMinutes() / intervalMinutes) * intervalMinutes);
                 const key = `${record.device_id}-${roundedTime.toISOString()}`;
                 
                 if (!grouped.has(key)) {
-                    grouped.set(key, { device_id: record.device_id, created_at: roundedTime.toISOString(), 
+                    grouped.set(key, { device_id: record.device_id, received_at: roundedTime.toISOString(), 
                         co2_values: [], h2s_values: [], voltage_values: [] });
                 }
                 
@@ -358,11 +358,11 @@
             
             return Array.from(grouped.values()).map(group => ({
                 device_id: group.device_id,
-                created_at: group.created_at,
+                received_at: group.received_at, // Changed from created_at to received_at
                 co2_ppm: group.co2_values.length > 0 ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length) : 0,
                 h2s_ppm: group.h2s_values.length > 0 ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100 : 0,
                 voltage: group.voltage_values.length > 0 ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100 : 0
-            })).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            })).sort((a, b) => new Date(a.received_at) - new Date(b.received_at)); // Changed from created_at to received_at
         };
 
         const applySmoothing = (data, windowSize = 3) => {
@@ -382,8 +382,8 @@
                 const { data, error } = await supabase
                     .from('sensor_data_complete')
                     .select('*')
-                    .gte('created_at', startTime)
-                    .order('created_at', { ascending: false });
+                    .gte('received_at', startTime) // Changed from created_at to received_at
+                    .order('received_at', { ascending: false }); // Changed from created_at to received_at
 
                 if (error) throw new Error(`Database error: ${error.message}`);
                 
@@ -400,7 +400,7 @@
             const deviceData = new Map();
             data.forEach(record => {
                 const existing = deviceData.get(record.device_id);
-                if (!existing || new Date(record.created_at) > new Date(existing.created_at)) {
+                if (!existing || new Date(record.received_at) > new Date(existing.received_at)) { // Changed from created_at to received_at
                     deviceData.set(record.device_id, record);
                 }
             });
@@ -486,7 +486,7 @@
         const updateMiniChart = (chart, data) => {
             if (!chart || !data.length) return;
 
-            const labels = data.map(d => formatChartLabel(d.created_at));
+            const labels = data.map(d => formatChartLabel(d.received_at)); // Changed from created_at to received_at
             const co2Data = data.map(d => d.co2_ppm || 0);
             const h2sData = data.map(d => d.h2s_ppm || 0);
 
@@ -514,7 +514,7 @@
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
                 const batteryClass = getBatteryClass(batteryPercent);
-                const isOnline = device.created_at && (Date.now() - new Date(device.created_at).getTime()) < 10 * 60 * 1000; // 10 minutes
+                const isOnline = device.received_at && (Date.now() - new Date(device.received_at).getTime()) < 10 * 60 * 1000; // Changed from created_at to received_at
                 
                 return `
                     <div class="sensor-card">
@@ -549,7 +549,7 @@
                         </div>
                         
                         <div class="last-update">
-                            Terakhir update: ${formatTime(device.created_at)}
+                            Terakhir update: ${formatTime(device.received_at)}
                         </div>
                     </div>
                 `;
