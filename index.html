@@ -3,22 +3,32 @@
 $supabaseUrl = 'https://aydpmoleewyaukeghnrr.supabase.co';
 $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
 
+// Debug flag
+$debug = true;
+
 // Function to make Supabase API requests
 function supabaseQuery($endpoint, $method = 'GET', $data = null) {
-    global $supabaseUrl, $supabaseKey;
+    global $supabaseUrl, $supabaseKey, $debug;
     
     $url = $supabaseUrl . '/rest/v1/' . $endpoint;
     $headers = [
         'apikey: ' . $supabaseKey,
         'Authorization: Bearer ' . $supabaseKey,
-        'Content-Type: application/json'
+        'Content-Type: application/json',
+        'Prefer: return=representation'
     ];
+    
+    if ($debug) {
+        echo "<!-- DEBUG: Requesting URL: $url -->\n";
+    }
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     
     if ($data && $method !== 'GET') {
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -26,23 +36,50 @@ function supabaseQuery($endpoint, $method = 'GET', $data = null) {
     
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
     curl_close($ch);
     
+    if ($debug) {
+        echo "<!-- DEBUG: HTTP Code: $httpCode -->\n";
+        echo "<!-- DEBUG: Response: " . substr($response, 0, 500) . " -->\n";
+        if ($error) {
+            echo "<!-- DEBUG: CURL Error: $error -->\n";
+        }
+    }
+    
+    if ($error) {
+        error_log("CURL Error: " . $error);
+        return false;
+    }
+    
     if ($httpCode >= 200 && $httpCode < 300) {
-        return json_decode($response, true);
+        $decoded = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("JSON Decode Error: " . json_last_error_msg());
+            return false;
+        }
+        return $decoded;
     } else {
-        error_log("Supabase API Error: " . $response);
+        error_log("Supabase API Error (HTTP $httpCode): " . $response);
         return false;
     }
 }
 
 // Get latest sensor data for each device (equivalent to your original query)
-$latestDataEndpoint = 'sensor_data_complete?select=*&order=received_at.desc';
+$latestDataEndpoint = 'sensor_data_complete?select=*&order=received_at.desc&limit=100';
 $allData = supabaseQuery($latestDataEndpoint);
+
+if ($debug && $allData === false) {
+    echo "<!-- DEBUG: Failed to fetch data from Supabase -->\n";
+}
 
 // Process data to get latest for each device
 $latestByDevice = [];
-if ($allData) {
+if ($allData && is_array($allData)) {
+    if ($debug) {
+        echo "<!-- DEBUG: Retrieved " . count($allData) . " records -->\n";
+    }
+    
     foreach ($allData as $row) {
         $deviceId = $row['device_id'];
         if (!isset($latestByDevice[$deviceId]) || 
@@ -50,20 +87,34 @@ if ($allData) {
             $latestByDevice[$deviceId] = $row;
         }
     }
+    
+    if ($debug) {
+        echo "<!-- DEBUG: Found " . count($latestByDevice) . " unique devices -->\n";
+        echo "<!-- DEBUG: Device IDs: " . implode(', ', array_keys($latestByDevice)) . " -->\n";
+    }
+} else {
+    if ($debug) {
+        echo "<!-- DEBUG: No data returned or invalid format -->\n";
+    }
 }
 
-// Get all historical data
-$historyData = supabaseQuery('sensor_data_complete?select=*&order=received_at.desc&limit=1000');
+// Get all historical data (limit to prevent timeout)
+$historyData = supabaseQuery('sensor_data_complete?select=*&order=received_at.desc&limit=500');
 
 // Get unique device IDs for filter
 $uniqueDevices = [];
-if ($historyData) {
+if ($historyData && is_array($historyData)) {
     foreach ($historyData as $row) {
         if (!in_array($row['device_id'], $uniqueDevices)) {
             $uniqueDevices[] = $row['device_id'];
         }
     }
     sort($uniqueDevices);
+    
+    if ($debug) {
+        echo "<!-- DEBUG: History data count: " . count($historyData) . " -->\n";
+        echo "<!-- DEBUG: Unique devices from history: " . implode(', ', $uniqueDevices) . " -->\n";
+    }
 }
 ?>
 
@@ -398,33 +449,39 @@ if ($historyData) {
             <?php
             if (!empty($latestByDevice)) {
                 foreach ($latestByDevice as $deviceId => $nodeData) {
-                    $isOnline = (strtotime($nodeData['received_at']) > (time() - 300)); // Consider online if data is less than 5 minutes old
+                    // Pastikan semua field yang dibutuhkan ada
+                    $co2_ppm = isset($nodeData["co2_ppm"]) ? floatval($nodeData["co2_ppm"]) : 0;
+                    $h2s_ppm = isset($nodeData["h2s_ppm"]) ? floatval($nodeData["h2s_ppm"]) : 0;
+                    $voltage = isset($nodeData["voltage"]) ? floatval($nodeData["voltage"]) : 0;
+                    $received_at = isset($nodeData['received_at']) ? $nodeData['received_at'] : date('Y-m-d H:i:s');
+                    
+                    $isOnline = (strtotime($received_at) > (time() - 300)); // Consider online if data is less than 5 minutes old
                     
                     // Determine status classes
-                    $co2Class = ($nodeData["co2_ppm"] < 1000) ? "good-level" : (($nodeData["co2_ppm"] < 2000) ? "warning-level" : "danger-level");
-                    $h2sClass = ($nodeData["h2s_ppm"] < 10) ? "good-level" : (($nodeData["h2s_ppm"] < 20) ? "warning-level" : "danger-level");
-                    $voltageClass = ($nodeData["voltage"] > 3.3) ? "good-level" : (($nodeData["voltage"] > 3.0) ? "warning-level" : "danger-level");
+                    $co2Class = ($co2_ppm < 1000) ? "good-level" : (($co2_ppm < 2000) ? "warning-level" : "danger-level");
+                    $h2sClass = ($h2s_ppm < 10) ? "good-level" : (($h2s_ppm < 20) ? "warning-level" : "danger-level");
+                    $voltageClass = ($voltage > 3.3) ? "good-level" : (($voltage > 3.0) ? "warning-level" : "danger-level");
                     
                     // Calculate node status
                     $nodeStatus = "Normal";
                     $statusClass = "good-level";
                     $alertCount = 0;
                     
-                    if ($nodeData["co2_ppm"] > 2000) {
+                    if ($co2_ppm > 2000) {
                         $nodeStatus = "CRITICAL CO2";
                         $statusClass = "danger-level";
                         $alertCount++;
-                    } elseif ($nodeData["co2_ppm"] > 1000) {
+                    } elseif ($co2_ppm > 1000) {
                         $nodeStatus = "Warning CO2";
                         $statusClass = "warning-level";
                         $alertCount++;
                     }
                     
-                    if ($nodeData["h2s_ppm"] > 20) {
+                    if ($h2s_ppm > 20) {
                         $nodeStatus = "CRITICAL H2S";
                         $statusClass = "danger-level";
                         $alertCount++;
-                    } elseif ($nodeData["h2s_ppm"] > 10) {
+                    } elseif ($h2s_ppm > 10) {
                         if ($statusClass != "danger-level") {
                             $nodeStatus = "Warning H2S";
                             $statusClass = "warning-level";
@@ -432,11 +489,11 @@ if ($historyData) {
                         $alertCount++;
                     }
                     
-                    if ($nodeData["voltage"] < 3.0) {
+                    if ($voltage < 3.0) {
                         $nodeStatus = "Low Voltage";
                         $statusClass = "danger-level";
                         $alertCount++;
-                    } elseif ($nodeData["voltage"] < 3.3) {
+                    } elseif ($voltage < 3.3) {
                         if ($statusClass == "good-level") {
                             $nodeStatus = "Voltage Warning";
                             $statusClass = "warning-level";
@@ -449,15 +506,15 @@ if ($historyData) {
                     $aqiClass = "good-level";
                     $aqiValue = 0;
                     
-                    if ($nodeData["co2_ppm"] > 2000 || $nodeData["h2s_ppm"] > 20) {
+                    if ($co2_ppm > 2000 || $h2s_ppm > 20) {
                         $aqi = "Hazardous";
                         $aqiClass = "danger-level";
                         $aqiValue = 300;
-                    } elseif ($nodeData["co2_ppm"] > 1500 || $nodeData["h2s_ppm"] > 15) {
+                    } elseif ($co2_ppm > 1500 || $h2s_ppm > 15) {
                         $aqi = "Unhealthy";
                         $aqiClass = "danger-level";
                         $aqiValue = 200;
-                    } elseif ($nodeData["co2_ppm"] > 1000 || $nodeData["h2s_ppm"] > 10) {
+                    } elseif ($co2_ppm > 1000 || $h2s_ppm > 10) {
                         $aqi = "Moderate";
                         $aqiClass = "warning-level";
                         $aqiValue = 100;
@@ -468,7 +525,7 @@ if ($historyData) {
                     
                     <div class="node-card">
                         <div class="node-header">
-                            <h2>Node Sensor <?php echo $deviceId; ?></h2>
+                            <h2>Node Sensor <?php echo htmlspecialchars($deviceId); ?></h2>
                             <div class="node-status">
                                 <span><?php echo $isOnline ? 'Online' : 'Offline'; ?></span>
                                 <div class="status-indicator <?php echo $isOnline ? '' : 'offline'; ?>"></div>
@@ -480,21 +537,21 @@ if ($historyData) {
                                 <!-- CO2 -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">CO2</div>
-                                    <div class="sensor-value <?php echo $co2Class; ?>"><?php echo $nodeData["co2_ppm"]; ?></div>
+                                    <div class="sensor-value <?php echo $co2Class; ?>"><?php echo $co2_ppm; ?></div>
                                     <div class="sensor-unit">PPM</div>
                                 </div>
                                 
                                 <!-- H2S -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">H2S</div>
-                                    <div class="sensor-value <?php echo $h2sClass; ?>"><?php echo $nodeData["h2s_ppm"]; ?></div>
+                                    <div class="sensor-value <?php echo $h2sClass; ?>"><?php echo $h2s_ppm; ?></div>
                                     <div class="sensor-unit">PPM</div>
                                 </div>
                                 
                                 <!-- Voltage -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">Voltage</div>
-                                    <div class="sensor-value <?php echo $voltageClass; ?>"><?php echo number_format($nodeData["voltage"], 2); ?></div>
+                                    <div class="sensor-value <?php echo $voltageClass; ?>"><?php echo number_format($voltage, 2); ?></div>
                                     <div class="sensor-unit">V</div>
                                 </div>
                                 
@@ -511,7 +568,7 @@ if ($historyData) {
                                 
                                 <!-- Mini Chart -->
                                 <div class="chart-container">
-                                    <canvas id="mini-chart-<?php echo $deviceId; ?>"></canvas>
+                                    <canvas id="mini-chart-<?php echo htmlspecialchars($deviceId); ?>"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -520,7 +577,11 @@ if ($historyData) {
                     <?php
                 }
             } else {
-                echo '<div class="no-data">Tidak ada data sensor tersedia atau koneksi ke Supabase bermasalah</div>';
+                echo '<div class="no-data">Tidak ada data sensor tersedia atau koneksi ke Supabase bermasalah<br>';
+                if ($debug) {
+                    echo 'Debug: Check browser console dan view source untuk debug info';
+                }
+                echo '</div>';
             }
             ?>
         </div>
@@ -559,20 +620,32 @@ if ($historyData) {
                 </thead>
                 <tbody>
                     <?php
-                    if ($historyData && !empty($historyData)) {
+                    if ($historyData && !empty($historyData) && is_array($historyData)) {
                         foreach($historyData as $row) {
-                            echo "<tr data-device='".$row["device_id"]."'>
-                                    <td>".$row["id"]."</td>
-                                    <td>Node ".$row["device_id"]."</td>
-                                    <td>".$row["co2_ppm"]."</td>
-                                    <td>".$row["h2s_ppm"]."</td>
-                                    <td>".number_format($row["voltage"], 2)."</td>
-                                    <td>".htmlspecialchars($row["sensors"])."</td>
-                                    <td>".date('Y-m-d H:i:s', strtotime($row["received_at"]))."</td>
+                            $id = isset($row["id"]) ? $row["id"] : 'N/A';
+                            $device_id = isset($row["device_id"]) ? $row["device_id"] : 'N/A';
+                            $co2_ppm = isset($row["co2_ppm"]) ? $row["co2_ppm"] : 0;
+                            $h2s_ppm = isset($row["h2s_ppm"]) ? $row["h2s_ppm"] : 0;
+                            $voltage = isset($row["voltage"]) ? number_format($row["voltage"], 2) : '0.00';
+                            $sensors = isset($row["sensors"]) ? htmlspecialchars($row["sensors"]) : '';
+                            $received_at = isset($row["received_at"]) ? date('Y-m-d H:i:s', strtotime($row["received_at"])) : 'N/A';
+                            
+                            echo "<tr data-device='".$device_id."'>
+                                    <td>".$id."</td>
+                                    <td>Node ".$device_id."</td>
+                                    <td>".$co2_ppm."</td>
+                                    <td>".$h2s_ppm."</td>
+                                    <td>".$voltage."</td>
+                                    <td>".$sensors."</td>
+                                    <td>".$received_at."</td>
                                 </tr>";
                         }
                     } else {
-                        echo "<tr><td colspan='7' class='no-data'>Tidak ada data tersedia</td></tr>";
+                        echo "<tr><td colspan='7' class='no-data'>Tidak ada data tersedia";
+                        if ($debug) {
+                            echo " (Debug: historyData is " . (is_array($historyData) ? 'array with ' . count($historyData) . ' items' : gettype($historyData)) . ")";
+                        }
+                        echo "</td></tr>";
                     }
                     ?>
                 </tbody>
@@ -589,19 +662,42 @@ function initMiniCharts() {
     if (!empty($latestByDevice)) {
         foreach ($latestByDevice as $deviceId => $nodeData) {
             // Get 12-hour historical data for this specific device from Supabase
-            $twelveHoursAgo = date('Y-m-d\TH:i:s', strtotime('-12 hours'));
-            $chartData = supabaseQuery("sensor_data_complete?device_id=eq.$deviceId&received_at=gte.$twelveHoursAgo&order=received_at.asc&limit=100");
+            $twelveHoursAgo = date('c', strtotime('-12 hours')); // ISO 8601 format
+            $chartEndpoint = "sensor_data_complete?device_id=eq.$deviceId&received_at=gte.$twelveHoursAgo&order=received_at.asc&limit=100";
+            $chartData = supabaseQuery($chartEndpoint);
             
             $labels = [];
             $co2Data = [];
             $h2sData = [];
             $voltageData = [];
             
-            if ($chartData && !empty($chartData)) {
+            if ($chartData && !empty($chartData) && is_array($chartData)) {
                 foreach($chartData as $row) {
                     $timestamp = strtotime($row["received_at"]);
                     $labels[] = date('H:i', $timestamp);
-                    $co2Data[] = floatval($row["co2_ppm"]);
+                    $co2Data[] = isset($row["co2_ppm"]) ? floatval($row["co2_ppm"]) : 0;
+                    $h2sData[] = isset($row["h2s_ppm"]) ? floatval($row["h2s_ppm"]) : 0;
+                    $voltageData[] = isset($row["voltage"]) ? floatval($row["voltage"]) : 0;
+                }
+            }
+            
+            // If no data, create default
+            if (empty($labels)) {
+                $labels = ['No Data'];
+                $co2Data = [0];
+                $h2sData = [0];
+                $voltageData = [0];
+            }
+            
+            // Escape device ID for JavaScript
+            $jsDeviceId = json_encode($deviceId);
+            ?>
+            
+            // Mini Chart for device <?php echo htmlspecialchars($deviceId); ?>
+            try {
+                const miniCanvas<?php echo preg_replace('/[^a-zA-Z0-9]/', '', $deviceId); ?> = document.getElementById('mini-chart-' + <?php echo $jsDeviceId; ?>);
+                if (miniCanvas<?php echo preg_replace('/[^a-zA-Z0-9]/', '', $deviceId); ?>) {
+                    new Chart(miniCanvas<?php echo preg_replace('/[^a-zA-Z0-9]/', '', $deviceId); ?>.getContext('2d'), {]);
                     $h2sData[] = floatval($row["h2s_ppm"]);
                     $voltageData[] = floatval($row["voltage"]);
                 }
