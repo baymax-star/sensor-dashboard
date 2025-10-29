@@ -401,29 +401,49 @@
             const grouped = new Map();
             data.forEach(record => {
                 const time = new Date(record.received_at);
-                const roundedTime = new Date(time.FullYear(), time.Month(), time.Date(), 
-                    time.Hours(), Math.floor(time.Minutes() / intervalMinutes) * intervalMinutes);
+        
+                // Membulatkan waktu ke interval tertentu
+                const roundedTime = new Date(
+                    time.getFullYear(),
+                    time.getMonth(),
+                    time.getDate(),
+                    time.getHours(),
+                    Math.floor(time.getMinutes() / intervalMinutes) * intervalMinutes
+                );
+        
                 const key = `${record.device_id}-${roundedTime.toISOString()}`;
-                
+        
                 if (!grouped.has(key)) {
-                    grouped.set(key, { device_id: record.device_id, received_at: roundedTime.toISOString(), 
-                        co2_values: [], h2s_values: [], voltage_values: [] });
+                    grouped.set(key, {
+                        device_id: record.device_id,
+                        received_at: roundedTime.toISOString(),
+                        co2_values: [],
+                        h2s_values: [],
+                        voltage_values: []
+                    });
                 }
-                
-                const group = grouped.(key);
+        
+                const group = grouped.get(key);
                 if (record.co2_ppm !== null) group.co2_values.push(record.co2_ppm);
                 if (record.h2s_ppm !== null) group.h2s_values.push(record.h2s_ppm);
                 if (record.voltage !== null) group.voltage_values.push(record.voltage);
             });
-            
+        
             return Array.from(grouped.values()).map(group => ({
                 device_id: group.device_id,
                 received_at: group.received_at,
-                co2_ppm: group.co2_values.length > 0 ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length) : 0,
-                h2s_ppm: group.h2s_values.length > 0 ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100 : 0,
-                voltage: group.voltage_values.length > 0 ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100 : 0
+                co2_ppm: group.co2_values.length > 0
+                    ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length)
+                    : 0,
+                h2s_ppm: group.h2s_values.length > 0
+                    ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100
+                    : 0,
+                voltage: group.voltage_values.length > 0
+                    ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100
+                    : 0
             })).sort((a, b) => new Date(a.received_at) - new Date(b.received_at));
         };
+
 
         const applySmoothing = (data, windowSize = 3) => {
             if (data.length < windowSize || !smoothingEnabled) return data;
