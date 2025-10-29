@@ -591,7 +591,10 @@
                 
                 const absoluteTimeDiff = Math.abs(timeDiff);
                 
-                if (timeDiff > TIMEOUT_THRESHOLD) {
+                  if (timeDiff > TIMEOUT_THRESHOLD) {
+                    statusText.textContent = 'Offline';
+                    statusIndicator.classList.add('offline');
+                } else if (timeDiff < -TIMEOUT_THRESHOLD) {
                     statusText.textContent = 'Offline';
                     statusIndicator.classList.add('offline');
                 } else {
