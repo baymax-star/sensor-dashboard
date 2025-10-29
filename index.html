@@ -571,10 +571,9 @@
                 const receivedAt = card.getAttribute('data-received-at');
                 if (!receivedAt) return;
                 
-                // Parse timestamp correctly handling timezone
+               // Parse timestamp correctly handling timezone
                 const receivedTime = new Date(receivedAt).getTime();
                 const timeDiff = currentTime - receivedTime;
-                const absoluteTimeDiff = Math.abs(timeDiff);
                 
                 // Handle negative time diff (clock skew) and set threshold to 5 minutes
                 const absoluteTimeDiff = Math.abs(timeDiff);
