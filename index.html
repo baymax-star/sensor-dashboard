@@ -106,7 +106,6 @@
             background-color: #1e7e34 !important;
         }
         
-        /* Main Dashboard Grid - 4 nodes in one row */
         .main-dashboard {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -164,7 +163,6 @@
             padding: 15px;
         }
         
-        /* Sensor Grid - 2x2 layout for each node */
         .sensor-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -230,7 +228,6 @@
             font-weight: bold;
         }
         
-        /* Color classes */
         .good-level {
             color: #28a745;
         }
@@ -241,7 +238,6 @@
             color: #dc3545;
         }
         
-        /* Charts - Smaller and more compact */
         .chart-container {
             height: 120px;
             position: relative;
@@ -294,7 +290,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
-        /* Responsive Design */
         @media (max-width: 1400px) {
             .main-dashboard {
                 grid-template-columns: repeat(2, 1fr);
@@ -329,7 +324,6 @@
             }
         }
         
-        /* Ensure page fits in viewport */
         html, body {
             height: 100vh;
             overflow-x: auto;
@@ -363,7 +357,6 @@
 
         <div id="error" class="error"></div>
         
-        <!-- Main Dashboard - 4 Nodes -->
         <div class="main-dashboard" id="sensorGrid">
             <div class="loading">Loading data sensor...</div>
         </div>
@@ -387,7 +380,8 @@
 
         const formatChartLabel = (timestamp) => new Date(timestamp).toLocaleTimeString('id-ID', { 
             hour: '2-digit', minute: '2-digit'
-        });      
+        });
+
         const getBatteryPercent = (voltage) => voltage ? Math.min(100, Math.max(0, Math.round(((voltage - 2.5) / (3.3 - 2.5)) * 100))) : 0;
 
         const showError = (msg) => {
@@ -397,6 +391,12 @@
         };
 
         const hideError = () => document.getElementById('error').style.display = 'none';
+
+        const checkDeviceOnlineStatus = (lastReceivedAt) => {
+            if (!lastReceivedAt) return false;
+            const timeDiff = Date.now() - new Date(lastReceivedAt).getTime();
+            return timeDiff < 3 * 60 * 1000; // 3 menit
+        };
 
         const aggregateData = (data, intervalMinutes) => {
             const grouped = new Map();
@@ -524,18 +524,11 @@
                         }
                     },
                     scales: {
-                        x: {
-                            display: false
-                        },
-                        y: {
-                            display: false,
-                            beginAtZero: true
-                        }
+                        x: { display: false },
+                        y: { display: false, beginAtZero: true }
                     },
                     elements: {
-                        point: {
-                            radius: 0
-                        }
+                        point: { radius: 0 }
                     },
                     interaction: {
                         mode: 'index',
@@ -558,6 +551,25 @@
             chart.update('none');
         };
 
+        const updateOnlineStatus = () => {
+            const latestData = getLatestDataByDevice(sensorData);
+            latestData.forEach(device => {
+                const isOnline = checkDeviceOnlineStatus(device.received_at);
+                const statusIndicator = document.querySelector(`#node_${device.device_id} .status-indicator`);
+                const statusText = document.querySelector(`#node_${device.device_id} .node-status span`);
+                
+                if (statusIndicator && statusText) {
+                    if (isOnline) {
+                        statusIndicator.classList.remove('offline');
+                        statusText.textContent = 'Online';
+                    } else {
+                        statusIndicator.classList.add('offline');
+                        statusText.textContent = 'Offline';
+                    }
+                }
+            });
+        };
+
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
             const latestData = getLatestDataByDevice(sensorData);
@@ -567,7 +579,6 @@
                 return;
             }
 
-            // Destroy existing charts
             deviceCharts.forEach(chart => chart.destroy());
             deviceCharts.clear();
 
@@ -575,14 +586,12 @@
 
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
-                const isOnline = device.received_at && (Date.now() - new Date(device.received_at).getTime()) < 10 * 60 * 1000;
+                const isOnline = checkDeviceOnlineStatus(device.received_at);
                 
-                // Determine status classes
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
                 const h2sClass = (device.h2s_ppm < 10) ? "good-level" : ((device.h2s_ppm < 20) ? "warning-level" : "danger-level");
                 const batteryClass = (batteryPercent > 50) ? "good-level" : ((batteryPercent > 20) ? "warning-level" : "danger-level");
                 
-                // Calculate node status
                 let nodeStatus = "Normal";
                 let statusClass = "good-level";
                 let alertCount = 0;
@@ -621,7 +630,6 @@
                     alertCount++;
                 }
                 
-                // Calculate AQI
                 let aqi = "Good";
                 let aqiClass = "good-level";
                 let aqiValue = 50;
@@ -641,7 +649,7 @@
                 }
                 
                 return `
-                    <div class="node-card">
+                    <div class="node-card" id="node_${device.device_id}">
                         <div class="node-header">
                             <h2>Node Sensor ${device.device_id}</h2>
                             <div class="node-status">
@@ -652,28 +660,24 @@
                         
                         <div class="node-content">
                             <div class="sensor-grid">
-                                <!-- CO2 -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">CO₂</div>
                                     <div class="sensor-value ${co2Class}">${device.co2_ppm || 0}</div>
                                     <div class="sensor-unit">PPM</div>
                                 </div>
                                 
-                                <!-- H2S -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">H₂S</div>
                                     <div class="sensor-value ${h2sClass}">${device.h2s_ppm || 0}</div>
                                     <div class="sensor-unit">PPM</div>
                                 </div>
                                 
-                                <!-- Battery -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">Battery</div>
                                     <div class="sensor-value ${batteryClass}">${batteryPercent}</div>
                                     <div class="sensor-unit">%</div>
                                 </div>
                                 
-                                <!-- Status -->
                                 <div class="sensor-item status-item">
                                     <div class="status-main ${statusClass}">${nodeStatus}</div>
                                     <div class="status-details">${alertCount} Alert(s) Active</div>
@@ -684,7 +688,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Mini Chart -->
                                 <div class="chart-container">
                                     <canvas id="chart_${device.device_id}"></canvas>
                                 </div>
@@ -694,7 +697,6 @@
                 `;
             }).join('');
 
-            // Create charts after DOM is updated
             setTimeout(() => {
                 latestData.forEach(device => {
                     const chart = createMiniChart(`chart_${device.device_id}`, device.device_id);
@@ -707,32 +709,6 @@
             }, 100);
         };
 
-const checkDeviceOnlineStatus = (lastReceivedAt) => {
-            if (!lastReceivedAt) return false;
-            const timeDiff = Date.now() - new Date(lastReceivedAt).getTime();
-            // Device dianggap offline jika tidak ada data lebih dari 3 menit
-            return timeDiff < 1 * 60 * 1000;
-        };
-
-        const renderSensorCards = () => {
-            const gridEl = document.getElementById('sensorGrid');
-            const latestData = getLatestDataByDevice(sensorData);
-            
-            if (latestData.length === 0) {
-                gridEl.innerHTML = '<div class="no-data">Tidak ada data sensor tersedia</div>';
-                return;
-            }
-
-            // Destroy existing charts
-            deviceCharts.forEach(chart => chart.destroy());
-            deviceCharts.clear();
-
-            const intervalMinutes = parseInt(document.getElementById('interval').value);
-
-            gridEl.innerHTML = latestData.map(device => {
-                const batteryPercent = getBatteryPercent(device.voltage);
-                const isOnline = checkDeviceOnlineStatus(device.received_at);
-        
         const updateAllCharts = () => {
             const intervalMinutes = parseInt(document.getElementById('interval').value);
             deviceCharts.forEach((chart, deviceId) => {
@@ -751,7 +727,8 @@ const checkDeviceOnlineStatus = (lastReceivedAt) => {
 
         const init = async () => {
             await loadSensorData();
-            updateInterval = setInterval(loadSensorData, 30000);
+            updateInterval = setInterval(loadSensorData, 15000);
+            setInterval(updateOnlineStatus, 5000);
         };
 
         window.addEventListener('beforeunload', () => {
@@ -763,7 +740,7 @@ const checkDeviceOnlineStatus = (lastReceivedAt) => {
             if (document.hidden) {
                 if (updateInterval) clearInterval(updateInterval);
             } else {
-                updateInterval = setInterval(loadSensorData, 30000);
+                updateInterval = setInterval(loadSensorData, 15000);
                 loadSensorData();
             }
         });
