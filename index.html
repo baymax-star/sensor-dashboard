@@ -563,9 +563,9 @@
             chart.update('none');
         };
         
-        const updateStatus = () => {
+        const updateStatusIndicators = () => {
             const currentTime = Date.now();
-            const TIMEOUT_THRESHOLD = 3 * 60 * 1000; // 
+            const TIMEOUT_THRESHOLD = 2 * 60 * 1000; //
             
             const nodeCards = document.querySelectorAll('.node-card');
             
@@ -573,7 +573,7 @@
                 const receivedAt = card.getAttribute('data-received-at');
                 if (!receivedAt) return;
                 
-                // Parse timestamp dengan benar
+                // Parse timestamp 
                 let lastDataReceived;
                 try {
                     lastDataReceived = new Date(receivedAt).getTime();
@@ -592,9 +592,6 @@
                 const absoluteTimeDiff = Math.abs(timeDiff);
                 
                 if (timeDiff > TIMEOUT_THRESHOLD) {
-                    statusText.textContent = 'Offline';
-                    statusIndicator.classList.add('offline');
-                } else if (timeDiff < -TIMEOUT_THRESHOLD) {
                     statusText.textContent = 'Offline';
                     statusIndicator.classList.add('offline');
                 } else {
