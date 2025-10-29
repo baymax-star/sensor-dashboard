@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Monitoring Sensor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.1/dist/umd/supabase.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -371,7 +371,7 @@
         const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let sensorData = [];
         let latestDeviceData = new Map(); // TAMBAHAN: Menyimpan data terbaru per device
         let updateInterval;
