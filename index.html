@@ -122,6 +122,11 @@
             overflow: hidden;
         }
         
+        .node-card.offline-card {
+            opacity: 0.7;
+            border: 2px solid #e74c3c;
+        }
+        
         .node-header {
             background-color: #34495e;
             color: white;
@@ -129,6 +134,10 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+        
+        .node-header.offline-header {
+            background-color: #e74c3c;
         }
         
         .node-header h2 {
@@ -247,6 +256,21 @@
             border-radius: 4px;
             padding: 8px;
             grid-column: 1 / -1;
+        }
+        
+        .offline-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(231, 76, 60, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #e74c3c;
+            border-radius: 6px;
         }
         
         .loading, .error {
@@ -373,7 +397,7 @@
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let sensorData = [];
-        let latestDeviceData = new Map(); // TAMBAHAN: Menyimpan data terbaru per device
+        let latestDeviceData = new Map();
         let updateInterval;
         let statusUpdateInterval;
         let smoothingEnabled = false;
@@ -449,7 +473,6 @@
                 
                 sensorData = data;
                 
-                // PERBAIKAN: Update latestDeviceData dengan data terbaru
                 const latest = getLatestDataByDevice(data);
                 latestDeviceData.clear();
                 latest.forEach(device => {
@@ -479,6 +502,27 @@
             const deviceData = sensorData.filter(record => record.device_id === deviceId);
             const aggregated = aggregateData(deviceData, intervalMinutes);
             return applySmoothing(aggregated).slice(-20);
+        };
+
+        // PERBAIKAN: Fungsi untuk cek status online/offline
+        const checkDeviceStatus = (deviceData) => {
+            const currentTime = Date.now();
+            const timeoutMinutes = parseInt(document.getElementById('timeoutThreshold').value);
+            const TIMEOUT_THRESHOLD = timeoutMinutes * 60 * 1000;
+            
+            try {
+                const lastDataTime = new Date(deviceData.received_at).getTime();
+                const timeDiff = currentTime - lastDataTime;
+                
+                return {
+                    isOnline: timeDiff <= TIMEOUT_THRESHOLD,
+                    timeSinceLastData: Math.floor(timeDiff / 60000), // dalam menit
+                    lastDataTime: deviceData.received_at
+                };
+            } catch (e) {
+                console.error('Error checking device status:', e);
+                return { isOnline: false, timeSinceLastData: null, lastDataTime: null };
+            }
         };
 
         const createMiniChart = (canvasId, deviceId) => {
@@ -553,36 +597,31 @@
             chart.update('none');
         };
         
-        // PERBAIKAN UTAMA: Fungsi status indicator yang benar
+        // PERBAIKAN: Update status indicators dengan logic yang benar
         const updateStatusIndicators = () => {
-            const currentTime = Date.now();
-            const TIMEOUT_THRESHOLD = 2 * 60 * 1000; // 
-            
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
                 if (!card) return;
                 
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
+                const nodeHeader = card.querySelector('.node-header');
                 
                 if (!statusText || !statusIndicator) return;
                 
-                try {
-                    const lastDataTime = new Date(deviceData.received_at).getTime();
-                    const timeDiff = currentTime - lastDataTime;
-                    
-                    // Cek apakah data masih fresh (kurang dari 5 menit)
-                    if (timeDiff > TIMEOUT_THRESHOLD) {
-                        statusText.textContent = 'Offline';
-                        statusIndicator.classList.add('offline');
-                    } else {
-                        statusText.textContent = 'Online';
-                        statusIndicator.classList.remove('offline');
-                    }
-                } catch (e) {
-                    console.error('Error updating status for device', deviceId, e);
-                    statusText.textContent = 'Error';
+                const status = checkDeviceStatus(deviceData);
+                
+                if (status.isOnline) {
+                    statusText.textContent = 'Online';
+                    statusIndicator.classList.remove('offline');
+                    nodeHeader.classList.remove('offline-header');
+                    card.classList.remove('offline-card');
+                } else {
+                    const minutesAgo = status.timeSinceLastData;
+                    statusText.textContent = `Offline (${minutesAgo}m ago)`;
                     statusIndicator.classList.add('offline');
+                    nodeHeader.classList.add('offline-header');
+                    card.classList.add('offline-card');
                 }
             });
         };
@@ -605,6 +644,7 @@
 
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
+                const status = checkDeviceStatus(device);
                 
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
                 const h2sClass = (device.h2s_ppm < 10) ? "good-level" : ((device.h2s_ppm < 20) ? "warning-level" : "danger-level");
@@ -614,69 +654,86 @@
                 let statusClass = "good-level";
                 let alertCount = 0;
                 
-                if (device.co2_ppm > 2000) {
-                    nodeStatus = "CRITICAL CO2";
+                if (!status.isOnline) {
+                    nodeStatus = "OFFLINE";
                     statusClass = "danger-level";
-                    alertCount++;
-                } else if (device.co2_ppm > 1000) {
-                    nodeStatus = "Warning CO2";
-                    statusClass = "warning-level";
-                    alertCount++;
-                }
-                
-                if (device.h2s_ppm > 20) {
-                    nodeStatus = "CRITICAL H2S";
-                    statusClass = "danger-level";
-                    alertCount++;
-                } else if (device.h2s_ppm > 10) {
-                    if (statusClass != "danger-level") {
-                        nodeStatus = "Warning H2S";
+                    alertCount = 1;
+                } else {
+                    if (device.co2_ppm > 2000) {
+                        nodeStatus = "CRITICAL CO2";
+                        statusClass = "danger-level";
+                        alertCount++;
+                    } else if (device.co2_ppm > 1000) {
+                        nodeStatus = "Warning CO2";
                         statusClass = "warning-level";
+                        alertCount++;
                     }
-                    alertCount++;
-                }
-                
-                if (batteryPercent < 20) {
-                    nodeStatus = "Low Battery";
-                    statusClass = "danger-level";
-                    alertCount++;
-                } else if (batteryPercent < 30) {
-                    if (statusClass == "good-level") {
-                        nodeStatus = "Battery Warning";
-                        statusClass = "warning-level";
+                    
+                    if (device.h2s_ppm > 20) {
+                        nodeStatus = "CRITICAL H2S";
+                        statusClass = "danger-level";
+                        alertCount++;
+                    } else if (device.h2s_ppm > 10) {
+                        if (statusClass != "danger-level") {
+                            nodeStatus = "Warning H2S";
+                            statusClass = "warning-level";
+                        }
+                        alertCount++;
                     }
-                    alertCount++;
+                    
+                    if (batteryPercent < 20) {
+                        nodeStatus = "Low Battery";
+                        statusClass = "danger-level";
+                        alertCount++;
+                    } else if (batteryPercent < 30) {
+                        if (statusClass == "good-level") {
+                            nodeStatus = "Battery Warning";
+                            statusClass = "warning-level";
+                        }
+                        alertCount++;
+                    }
                 }
                 
                 let aqi = "Good";
                 let aqiClass = "good-level";
                 let aqiValue = 50;
                 
-                if (device.co2_ppm > 2000 || device.h2s_ppm > 20) {
-                    aqi = "Hazardous";
+                if (status.isOnline) {
+                    if (device.co2_ppm > 2000 || device.h2s_ppm > 20) {
+                        aqi = "Hazardous";
+                        aqiClass = "danger-level";
+                        aqiValue = 300;
+                    } else if (device.co2_ppm > 1500 || device.h2s_ppm > 15) {
+                        aqi = "Unhealthy";
+                        aqiClass = "danger-level";
+                        aqiValue = 200;
+                    } else if (device.co2_ppm > 1000 || device.h2s_ppm > 10) {
+                        aqi = "Moderate";
+                        aqiClass = "warning-level";
+                        aqiValue = 100;
+                    }
+                } else {
+                    aqi = "No Data";
                     aqiClass = "danger-level";
-                    aqiValue = 300;
-                } else if (device.co2_ppm > 1500 || device.h2s_ppm > 15) {
-                    aqi = "Unhealthy";
-                    aqiClass = "danger-level";
-                    aqiValue = 200;
-                } else if (device.co2_ppm > 1000 || device.h2s_ppm > 10) {
-                    aqi = "Moderate";
-                    aqiClass = "warning-level";
-                    aqiValue = 100;
+                    aqiValue = "N/A";
                 }
                 
+                const offlineClass = !status.isOnline ? 'offline-card' : '';
+                const offlineHeaderClass = !status.isOnline ? 'offline-header' : '';
+                const offlineOverlay = !status.isOnline ? `<div class="offline-overlay">Device Offline - ${status.timeSinceLastData} menit yang lalu</div>` : '';
+                
                 return `
-                    <div class="node-card" data-device-id="${device.device_id}">
-                        <div class="node-header">
+                    <div class="node-card ${offlineClass}" data-device-id="${device.device_id}">
+                        <div class="node-header ${offlineHeaderClass}">
                             <h2>Node Sensor ${device.device_id}</h2>
                             <div class="node-status">
-                                <span class="status-text">Checking...</span>
-                                <div class="status-indicator"></div>
+                                <span class="status-text">${status.isOnline ? 'Online' : `Offline (${status.timeSinceLastData}m ago)`}</span>
+                                <div class="status-indicator ${!status.isOnline ? 'offline' : ''}"></div>
                             </div>
                         </div>
                         
                         <div class="node-content">
+                            ${offlineOverlay}
                             <div class="sensor-grid">
                                 <div class="sensor-item">
                                     <div class="sensor-label">CO₂</div>
@@ -702,7 +759,7 @@
                                     
                                     <div class="aqi-info">
                                         <div class="aqi-label">Air Quality Index</div>
-                                        <div class="aqi-value ${aqiClass}">${aqi} (${aqiValue})</div>
+                                        <div class="aqi-value ${aqiClass}">${aqi} ${typeof aqiValue === 'number' ? `(${aqiValue})` : ''}</div>
                                     </div>
                                 </div>
                                 
@@ -712,63 +769,4 @@
                             </div>
                         </div>
                     </div>
-                `;
-            }).join('');
-
-            setTimeout(() => {
-                latestData.forEach(device => {
-                    const chart = createMiniChart(`chart_${device.device_id}`, device.device_id);
-                    if (chart) {
-                        deviceCharts.set(device.device_id, chart);
-                        const historyData = getDeviceHistoryData(device.device_id, intervalMinutes);
-                        updateMiniChart(chart, historyData);
-                    }
-                });
-                
-                setTimeout(updateStatusIndicators, 200);
-            }, 100);
-        };
-
-        const updateAllCharts = () => {
-            const intervalMinutes = parseInt(document.getElementById('interval').value);
-            deviceCharts.forEach((chart, deviceId) => {
-                const historyData = getDeviceHistoryData(deviceId, intervalMinutes);
-                updateMiniChart(chart, historyData);
-            });
-        };
-
-        const toggleSmoothing = () => {
-            smoothingEnabled = !smoothingEnabled;
-            document.getElementById('smoothBtn').textContent = smoothingEnabled ? 'Disable Smoothing' : 'Enable Smoothing';
-            updateAllCharts();
-        };
-
-        document.getElementById('interval').addEventListener('change', updateAllCharts);
-
-        const init = async () => {
-            await loadSensorData();
-            updateInterval = setInterval(loadSensorData, 30000);
-            statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
-        };
-
-        window.addEventListener('beforeunload', () => {
-            if (updateInterval) clearInterval(updateInterval);
-            if (statusUpdateInterval) clearInterval(statusUpdateInterval);
-            deviceCharts.forEach(chart => chart.destroy());
-        });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                if (updateInterval) clearInterval(updateInterval);
-                if (statusUpdateInterval) clearInterval(statusUpdateInterval);
-            } else {
-                updateInterval = setInterval(loadSensorData, 30000);
-                statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
-                loadSensorData();
-            }
-        });
-
-        window.addEventListener('load', init);
-    </script>
-</body>
-</html>
+                `
