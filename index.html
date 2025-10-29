@@ -707,6 +707,32 @@
             }, 100);
         };
 
+const checkDeviceOnlineStatus = (lastReceivedAt) => {
+            if (!lastReceivedAt) return false;
+            const timeDiff = Date.now() - new Date(lastReceivedAt).getTime();
+            // Device dianggap offline jika tidak ada data lebih dari 3 menit
+            return timeDiff < 1 * 60 * 1000;
+        };
+
+        const renderSensorCards = () => {
+            const gridEl = document.getElementById('sensorGrid');
+            const latestData = getLatestDataByDevice(sensorData);
+            
+            if (latestData.length === 0) {
+                gridEl.innerHTML = '<div class="no-data">Tidak ada data sensor tersedia</div>';
+                return;
+            }
+
+            // Destroy existing charts
+            deviceCharts.forEach(chart => chart.destroy());
+            deviceCharts.clear();
+
+            const intervalMinutes = parseInt(document.getElementById('interval').value);
+
+            gridEl.innerHTML = latestData.map(device => {
+                const batteryPercent = getBatteryPercent(device.voltage);
+                const isOnline = checkDeviceOnlineStatus(device.received_at);
+        
         const updateAllCharts = () => {
             const intervalMinutes = parseInt(document.getElementById('interval').value);
             deviceCharts.forEach((chart, deviceId) => {
