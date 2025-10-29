@@ -554,26 +554,34 @@
         };
         
 
-        const updateStatusIndicators = () => {
-        if (latestDeviceData.size === 0) return;
-        const currentTime = Date.now();
-        latestDeviceData.forEach((deviceData, deviceId) => {
-            const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
-            if (!card) return;
-        
-            const statusText = card.querySelector('.status-text');
-            const statusIndicator = card.querySelector('.status-indicator');
-            const lastDataTime = new Date(deviceData.received_at).getTime();
-            const timeDiff = currentTime - lastDataTime;
-        
-            if (timeDiff > 5 * 60 * 1000) { 
-                statusText.textContent = 'Offline';
-                statusIndicator.classList.add('offline');
-            } else {
-                statusText.textContent = 'Online';
-                statusIndicator.classList.remove('offline');
-            }
-        });
+  const updateStatusIndicators = () => {
+    if (latestDeviceData.size === 0) return;
+
+    const currentTime = Date.now();
+
+    latestDeviceData.forEach((deviceData, deviceId) => {
+        const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
+        if (!card) return;
+
+        const statusText = card.querySelector('.status-text');
+        const statusIndicator = card.querySelector('.status-indicator');
+
+        const lastDataTime = new Date(deviceData.received_at).getTime();
+        const timeDiff = currentTime - lastDataTime;
+
+        // Reset class dulu agar tidak menumpuk status lama
+        statusIndicator.classList.remove('offline', 'online');
+
+        if (timeDiff > 5 * 60 * 1000) { // lebih dari 5 menit
+            statusText.textContent = 'Offline';
+            statusIndicator.classList.add('offline');
+        } else {
+            statusText.textContent = 'Online';
+            statusIndicator.classList.add('online');
+        }
+    });
+};
+
 
 
         const renderSensorCards = () => {
