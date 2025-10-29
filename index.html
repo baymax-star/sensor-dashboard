@@ -572,10 +572,13 @@
             deviceCharts.clear();
 
             const intervalMinutes = parseInt(document.getElementById('interval').value);
+            const currentTime = Date.now(); // Get current time once for consistency
 
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
-                const isOnline = device.received_at && (Date.now() - new Date(device.received_at).getTime()) < 1 * 60 * 1000;
+                const timeDiff = device.received_at ? (currentTime - new Date(device.received_at).getTime()) : Infinity;
+                const isOnline = timeDiff < 2 * 60 * 1000; // 2 minutes threshold
+                const minutesAgo = Math.floor(timeDiff / 60000);
                 
                 // Determine status classes
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
