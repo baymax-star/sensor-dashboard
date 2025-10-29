@@ -563,7 +563,7 @@
             chart.update('none');
         };
         
-        const updateStatusIndicators = () => {
+        const updateStatus = () => {
             const currentTime = Date.now();
             const TIMEOUT_THRESHOLD = 3 * 60 * 1000; // 
             
@@ -749,8 +749,7 @@
                     }
                 });
                 
-                // Initial status update after cards are rendered
-                setTimeout(Indicators, 100);
+                setTimeout(updateStatusIndicators, 100); 
             }, 100);
         };
 
