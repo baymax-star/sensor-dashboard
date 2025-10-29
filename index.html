@@ -565,40 +565,31 @@
         
         const updateStatusIndicators = () => {
             const currentTime = Date.now();
+            const TIMEOUT_THRESHOLD = 5 * 60 * 1000; // 5 minutes - node dianggap offline jika tidak ada data lebih dari ini
+            
             const nodeCards = document.querySelectorAll('.node-card');
             
             nodeCards.forEach(card => {
                 const receivedAt = card.getAttribute('data-received-at');
                 if (!receivedAt) return;
                 
-               // Parse timestamp correctly handling timezone
-                const receivedTime = new Date(receivedAt).getTime();
-                const timeDiff = currentTime - receivedTime;
-                
-                // Handle negative time diff (clock skew) and set threshold to 5 minutes
-                const absoluteTimeDiff = Math.abs(timeDiff);
-                const minutesAgo = Math.floor(absoluteTimeDiff / 60000);
-                
-                // Node is online if data is less than 5 minutes old
-                // OR if time difference is negative (clock skew, treat as recent data)
-                const ONLINE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
-                const isOnline = (timeDiff < 0 && absoluteTimeDiff < 24 * 60 * 60 * 1000) || (timeDiff >= 0 && timeDiff < ONLINE_THRESHOLD);
+                const lastDataReceived = new Date(receivedAt).getTime();
+                const timeDiff = currentTime - lastDataReceived;
                 
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
                 
-                if (statusText && statusIndicator) {
-                    if (timeDiff < 0 && absoluteTimeDiff < 24 * 60 * 60 * 1000) {
-                        // Data timestamp is in the future (clock skew detected)
-                        statusText.textContent = `Online (⚠ clock +${minutesAgo}m)`;
-                        statusIndicator.classList.remove('offline');
-                    } else if (isOnline) {
-                        statusText.textContent = 'Online';
-                        statusIndicator.classList.remove('offline');
-                    } else {
-                        statusText.textContent = `Offline (${minutesAgo}m ago)`;
-                        statusIndicator.classList.add('offline');
-                    }
+                if (!statusText || !statusIndicator) return;
+                
+                // Simple logic: if (currentTime - lastDataReceived > TIMEOUT_THRESHOLD)
+                if (timeDiff > TIMEOUT_THRESHOLD) {
+                    // Node OFFLINE - data sudah lebih dari 5 menit
+                    statusText.textContent = 'Offline';
+                    statusIndicator.classList.add('offline');
+                } else {
+                    // Node ONLINE - data masih fresh (< 5 menit)
+                    statusText.textContent = 'Online';
+                    statusIndicator.classList.remove('offline');
                 }
             });
         };
