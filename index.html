@@ -462,18 +462,35 @@
 
         const loadSensorData = async () => {
             try {
+                console.log('🔄 Loading sensor data...');
                 const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+                console.log('📅 Start time:', startTime);
+                
                 const { data, error } = await supabase
                     .from('sensor_data_complete')
                     .select('*')
                     .gte('received_at', startTime)
                     .order('received_at', { ascending: false });
 
-                if (error) throw new Error(`Database error: ${error.message}`);
+                console.log('📊 Query result:', { data, error });
+
+                if (error) {
+                    console.error('❌ Database error:', error);
+                    throw new Error(`Database error: ${error.message}`);
+                }
                 
+                if (!data || data.length === 0) {
+                    console.warn('⚠️ No data returned from database');
+                    showError('Tidak ada data sensor dalam 24 jam terakhir');
+                    document.getElementById('sensorGrid').innerHTML = '<div class="no-data">Tidak ada data sensor tersedia</div>';
+                    return;
+                }
+                
+                console.log(`✅ Loaded ${data.length} records`);
                 sensorData = data;
                 
                 const latest = getLatestDataByDevice(data);
+                console.log('📍 Latest devices:', latest.length);
                 latestDeviceData.clear();
                 latest.forEach(device => {
                     latestDeviceData.set(device.device_id, device);
@@ -482,8 +499,11 @@
                 renderSensorCards();
                 document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(new Date())}`;
                 hideError();
+                console.log('✅ Render complete');
             } catch (error) {
+                console.error('❌ Load error:', error);
                 showError(`Gagal memuat data sensor: ${error.message}`);
+                document.getElementById('sensorGrid').innerHTML = `<div class="error">Error: ${error.message}</div>`;
             }
         };
 
@@ -504,11 +524,10 @@
             return applySmoothing(aggregated).slice(-20);
         };
 
-        // PERBAIKAN: Fungsi untuk cek status online/offline
+        // PERBAIKAN: Fungsi untuk cek status online/offline dengan timeout 5 menit
         const checkDeviceStatus = (deviceData) => {
             const currentTime = Date.now();
-            const timeoutMinutes = parseInt(document.getElementById('timeoutThreshold').value);
-            const TIMEOUT_THRESHOLD = timeoutMinutes * 60 * 1000;
+            const TIMEOUT_THRESHOLD = 5 * 60 * 1000; // 5 menit fixed
             
             try {
                 const lastDataTime = new Date(deviceData.received_at).getTime();
