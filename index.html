@@ -575,7 +575,7 @@
 
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
-                const isOnline = device.received_at && (Date.now() - new Date(device.received_at).getTime()) < 10 * 60 * 1000;
+                const isOnline = device.received_at && (Date.now() - new Date(device.received_at).getTime()) < 1 * 60 * 1000;
                 
                 // Determine status classes
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
