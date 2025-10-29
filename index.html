@@ -473,9 +473,11 @@ const aggregateData = (data, intervalMinutes) => {
                     latestDeviceData.set(device.device_id, device);
                 });
                 
-                renderSensorCards();
-                document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(new Date())}`;
-                hideError();
+            renderSensorCards();
+            document.getElementById('lastUpdate').textContent =
+                `Terakhir diperbarui: ${formatTime(new Date())}`;
+            updateStatusIndicators();
+            hideError();
             } catch (error) {
                 showError(`Gagal memuat data sensor: ${error.message}`);
             }
@@ -570,7 +572,7 @@ const aggregateData = (data, intervalMinutes) => {
         };
         
 
-        const updateStatusIndicators = () => {
+                const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             const currentTime = Date.now();
         
@@ -581,13 +583,13 @@ const aggregateData = (data, intervalMinutes) => {
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
         
-                // langsung pakai Date() tanpa tambah offset
-                const lastDataTime = new Date(deviceData.received_at).getTime();
+                // pastikan timestamp valid & sesuaikan timezone (+7 jam)
+                const lastDataTime = new Date(deviceData.received_at).getTime() + (7 * 60 * 60 * 1000);
                 const timeDiff = currentTime - lastDataTime;
         
                 statusIndicator.classList.remove('offline', 'online');
         
-                if (isNaN(lastDataTime) || timeDiff > 5 * 60 * 1000) {
+                if (isNaN(lastDataTime) || timeDiff > 5 * 60 * 1000) { // lebih dari 5 menit
                     statusText.textContent = 'Offline';
                     statusIndicator.classList.add('offline');
                 } else {
@@ -596,6 +598,7 @@ const aggregateData = (data, intervalMinutes) => {
                 }
             });
         };
+
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
             const latestData = Array.from(latestDeviceData.values()).sort((a, b) => 
