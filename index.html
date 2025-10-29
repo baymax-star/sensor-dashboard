@@ -106,7 +106,6 @@
             background-color: #1e7e34 !important;
         }
         
-        /* Main Dashboard Grid - 4 nodes in one row */
         .main-dashboard {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -165,7 +164,6 @@
             padding: 15px;
         }
         
-        /* Sensor Grid - 2x2 layout for each node */
         .sensor-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -231,7 +229,6 @@
             font-weight: bold;
         }
         
-        /* Color classes */
         .good-level {
             color: #28a745;
         }
@@ -242,7 +239,6 @@
             color: #dc3545;
         }
         
-        /* Charts - Smaller and more compact */
         .chart-container {
             height: 120px;
             position: relative;
@@ -295,7 +291,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
-        /* Responsive Design */
         @media (max-width: 1400px) {
             .main-dashboard {
                 grid-template-columns: repeat(2, 1fr);
@@ -330,7 +325,6 @@
             }
         }
         
-        /* Ensure page fits in viewport */
         html, body {
             height: 100vh;
             overflow-x: auto;
@@ -364,7 +358,6 @@
 
         <div id="error" class="error"></div>
         
-        <!-- Main Dashboard - 4 Nodes -->
         <div class="main-dashboard" id="sensorGrid">
             <div class="loading">Loading data sensor...</div>
         </div>
@@ -380,6 +373,7 @@
         
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let sensorData = [];
+        let latestDeviceData = new Map(); // TAMBAHAN: Menyimpan data terbaru per device
         let updateInterval;
         let statusUpdateInterval;
         let smoothingEnabled = false;
@@ -454,6 +448,14 @@
                 if (error) throw new Error(`Database error: ${error.message}`);
                 
                 sensorData = data;
+                
+                // PERBAIKAN: Update latestDeviceData dengan data terbaru
+                const latest = getLatestDataByDevice(data);
+                latestDeviceData.clear();
+                latest.forEach(device => {
+                    latestDeviceData.set(device.device_id, device);
+                });
+                
                 renderSensorCards();
                 document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(new Date())}`;
                 hideError();
@@ -529,23 +531,11 @@
                         }
                     },
                     scales: {
-                        x: {
-                            display: false
-                        },
-                        y: {
-                            display: false,
-                            beginAtZero: true
-                        }
+                        x: { display: false },
+                        y: { display: false, beginAtZero: true }
                     },
-                    elements: {
-                        point: {
-                            radius: 0
-                        }
-                    },
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    }
+                    elements: { point: { radius: 0 } },
+                    interaction: { mode: 'index', intersect: false }
                 }
             });
         };
@@ -563,60 +553,51 @@
             chart.update('none');
         };
         
-const updateStatusIndicators = () => {
+        // PERBAIKAN UTAMA: Fungsi status indicator yang benar
+        const updateStatusIndicators = () => {
             const currentTime = Date.now();
-            const TIMEOUT_THRESHOLD = 5 * 60 * 1000; // 5 minutes - node dianggap offline jika tidak ada data lebih dari ini
+            const TIMEOUT_THRESHOLD = 2 * 60 * 1000; // 
             
-            const nodeCards = document.querySelectorAll('.node-card');
-            
-            nodeCards.forEach(card => {
-                const receivedAt = card.getAttribute('data-received-at');
-                if (!receivedAt) return;
-                
-                // Parse timestamp dengan benar
-                let lastDataReceived;
-                try {
-                    lastDataReceived = new Date(receivedAt).getTime();
-                } catch (e) {
-                    console.error('Error parsing timestamp:', receivedAt, e);
-                    return;
-                }
-                
-                const timeDiff = currentTime - lastDataReceived;
+            latestDeviceData.forEach((deviceData, deviceId) => {
+                const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
+                if (!card) return;
                 
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
                 
                 if (!statusText || !statusIndicator) return;
                 
-                // Simple logic: if (currentTime - lastDataReceived > TIMEOUT_THRESHOLD)
-                // Gunakan Math.abs untuk handle clock skew (negative time diff)
-                const absoluteTimeDiff = Math.abs(timeDiff);
-                
-                if (timeDiff > TIMEOUT_THRESHOLD) {
-                    // Node OFFLINE - data sudah lebih dari 5 menit yang lalu
-                    statusText.textContent = 'Offline';
+                try {
+                    const lastDataTime = new Date(deviceData.received_at).getTime();
+                    const timeDiff = currentTime - lastDataTime;
+                    
+                    // Cek apakah data masih fresh (kurang dari 5 menit)
+                    if (timeDiff > TIMEOUT_THRESHOLD) {
+                        statusText.textContent = 'Offline';
+                        statusIndicator.classList.add('offline');
+                    } else {
+                        statusText.textContent = 'Online';
+                        statusIndicator.classList.remove('offline');
+                    }
+                } catch (e) {
+                    console.error('Error updating status for device', deviceId, e);
+                    statusText.textContent = 'Error';
                     statusIndicator.classList.add('offline');
-                } else if (timeDiff < -TIMEOUT_THRESHOLD) {
-                    statusText.textContent = 'Offline';
-                    statusIndicator.classList.add('offline');
-                } else {
-                    // Node ONLINE 
-                    statusText.textContent = 'Online';
-                    statusIndicator.classList.remove('offline');
                 }
             });
         };
+
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
-            const latestData = getLatestDataByDevice(sensorData);
+            const latestData = Array.from(latestDeviceData.values()).sort((a, b) => 
+                parseInt(a.device_id) - parseInt(b.device_id)
+            );
             
             if (latestData.length === 0) {
                 gridEl.innerHTML = '<div class="no-data">Tidak ada data sensor tersedia</div>';
                 return;
             }
 
-            // Destroy existing charts
             deviceCharts.forEach(chart => chart.destroy());
             deviceCharts.clear();
 
@@ -625,12 +606,10 @@ const updateStatusIndicators = () => {
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
                 
-                // Determine status classes
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
                 const h2sClass = (device.h2s_ppm < 10) ? "good-level" : ((device.h2s_ppm < 20) ? "warning-level" : "danger-level");
                 const batteryClass = (batteryPercent > 50) ? "good-level" : ((batteryPercent > 20) ? "warning-level" : "danger-level");
                 
-                // Calculate node status
                 let nodeStatus = "Normal";
                 let statusClass = "good-level";
                 let alertCount = 0;
@@ -669,7 +648,6 @@ const updateStatusIndicators = () => {
                     alertCount++;
                 }
                 
-                // Calculate AQI
                 let aqi = "Good";
                 let aqiClass = "good-level";
                 let aqiValue = 50;
@@ -689,7 +667,7 @@ const updateStatusIndicators = () => {
                 }
                 
                 return `
-                    <div class="node-card" data-device-id="${device.device_id}" data-received-at="${device.received_at}">
+                    <div class="node-card" data-device-id="${device.device_id}">
                         <div class="node-header">
                             <h2>Node Sensor ${device.device_id}</h2>
                             <div class="node-status">
@@ -700,28 +678,24 @@ const updateStatusIndicators = () => {
                         
                         <div class="node-content">
                             <div class="sensor-grid">
-                                <!-- CO2 -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">CO₂</div>
                                     <div class="sensor-value ${co2Class}">${device.co2_ppm || 0}</div>
                                     <div class="sensor-unit">PPM</div>
                                 </div>
                                 
-                                <!-- H2S -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">H₂S</div>
                                     <div class="sensor-value ${h2sClass}">${device.h2s_ppm || 0}</div>
                                     <div class="sensor-unit">PPM</div>
                                 </div>
                                 
-                                <!-- Battery -->
                                 <div class="sensor-item">
                                     <div class="sensor-label">Battery</div>
                                     <div class="sensor-value ${batteryClass}">${batteryPercent}</div>
                                     <div class="sensor-unit">%</div>
                                 </div>
                                 
-                                <!-- Status -->
                                 <div class="sensor-item status-item">
                                     <div class="status-main ${statusClass}">${nodeStatus}</div>
                                     <div class="status-details">${alertCount} Alert(s) Active</div>
@@ -732,7 +706,6 @@ const updateStatusIndicators = () => {
                                     </div>
                                 </div>
                                 
-                                <!-- Mini Chart -->
                                 <div class="chart-container">
                                     <canvas id="chart_${device.device_id}"></canvas>
                                 </div>
@@ -742,7 +715,6 @@ const updateStatusIndicators = () => {
                 `;
             }).join('');
 
-            // Create charts after DOM is updated
             setTimeout(() => {
                 latestData.forEach(device => {
                     const chart = createMiniChart(`chart_${device.device_id}`, device.device_id);
@@ -753,7 +725,7 @@ const updateStatusIndicators = () => {
                     }
                 });
                 
-                setTimeout(updateStatusIndicators, 100); 
+                setTimeout(updateStatusIndicators, 200);
             }, 100);
         };
 
@@ -776,9 +748,7 @@ const updateStatusIndicators = () => {
         const init = async () => {
             await loadSensorData();
             updateInterval = setInterval(loadSensorData, 30000);
-            statusUpdateInterval = setInterval(() => {
-                updateStatusIndicators();
-            }, 5000);
+            statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
         };
 
         window.addEventListener('beforeunload', () => {
@@ -795,7 +765,6 @@ const updateStatusIndicators = () => {
                 updateInterval = setInterval(loadSensorData, 30000);
                 statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
                 loadSensorData();
-                updateStatusIndicators();
             }
         });
 
