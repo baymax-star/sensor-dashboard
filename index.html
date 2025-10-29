@@ -449,7 +449,6 @@
                 
                 sensorData = data;
                 
-                // PERBAIKAN: Update latestDeviceData dengan data terbaru
                 const latest = getLatestDataByDevice(data);
                 latestDeviceData.clear();
                 latest.forEach(device => {
@@ -464,16 +463,32 @@
             }
         };
 
-        const getLatestDataByDevice = (data) => {
-            const deviceData = new Map();
-            data.forEach(record => {
-                const existing = deviceData.get(record.device_id);
-                if (!existing || new Date(record.received_at) > new Date(existing.received_at)) {
-                    deviceData.set(record.device_id, record);
-                }
-            });
-            return Array.from(deviceData.values()).sort((a, b) => parseInt(a.device_id) - parseInt(b.device_id));
-        };
+    const getLatestDataByDevice = (data) => {
+    const deviceData = new Map();
+
+    data.forEach(record => {
+        // --- Pastikan setiap data punya waktu yang valid ---
+        if (!record.received_at) {
+            record.received_at = new Date().toISOString(); 
+        } else if (typeof record.received_at === 'string' && record.received_at.includes(' ')) {
+            // Ubah format agar bisa dibaca oleh new Date()
+            record.received_at = record.received_at.replace(' ', 'T') + 'Z';
+        }
+
+        // --- Pilih data paling baru per device_id ---
+        const existing = deviceData.get(record.device_id);
+        if (!existing || new Date(record.received_at) > new Date(existing.received_at)) {
+            deviceData.set(record.device_id, record);
+        }
+    });
+
+    // --- Simpan ke global Map latestDeviceData agar bisa dipakai fungsi lain ---
+    latestDeviceData = deviceData;
+
+    // --- Kembalikan array yang sudah diurutkan berdasarkan ID ---
+    return Array.from(deviceData.values())
+        .sort((a, b) => parseInt(a.device_id) - parseInt(b.device_id));
+};
 
         const getDeviceHistoryData = (deviceId, intervalMinutes) => {
             const deviceData = sensorData.filter(record => record.device_id === deviceId);
@@ -554,7 +569,7 @@
         };
         
 
-  const updateStatusIndicators = () => {
+const updateStatusIndicators = () => {
     if (latestDeviceData.size === 0) return;
 
     const currentTime = Date.now();
@@ -566,13 +581,25 @@
         const statusText = card.querySelector('.status-text');
         const statusIndicator = card.querySelector('.status-indicator');
 
-        const lastDataTime = new Date(deviceData.received_at).getTime();
+        // --- Validasi waktu terima data ---
+        let receivedAt = deviceData.received_at;
+
+        // Jika formatnya pakai spasi (contoh: "2025-10-29 21:45:00")
+        if (typeof receivedAt === 'string' && receivedAt.includes(' ')) {
+            receivedAt = receivedAt.replace(' ', 'T') + 'Z';
+        }
+
+        const lastDataTime = new Date(receivedAt).getTime();
         const timeDiff = currentTime - lastDataTime;
 
-        // Reset class dulu agar tidak menumpuk status lama
+        // Debug log (sementara)
+        console.log(deviceId, receivedAt, lastDataTime, timeDiff);
+
+        // Reset class status
         statusIndicator.classList.remove('offline', 'online');
 
-        if (timeDiff > 5 * 60 * 1000) { // lebih dari 5 menit
+        // --- Logika Online/Offline ---
+        if (isNaN(lastDataTime) || timeDiff > 5 * 60 * 1000) {
             statusText.textContent = 'Offline';
             statusIndicator.classList.add('offline');
         } else {
@@ -581,6 +608,9 @@
         }
     });
 };
+
+// Jalankan pengecekan setiap 30 detik
+setInterval(updateStatusIndicators, 30000);
 
 
 
