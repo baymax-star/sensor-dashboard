@@ -772,11 +772,7 @@
 
         const init = async () => {
             await loadSensorData();
-            
-            // Fetch new data from database every 30 seconds
             updateInterval = setInterval(loadSensorData, 30000);
-            
-            // Update status indicators every 5 seconds (without fetching data)
             statusUpdateInterval = setInterval(() => {
                 updateStatusIndicators();
             }, 5000);
