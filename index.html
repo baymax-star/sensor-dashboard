@@ -563,7 +563,7 @@
             chart.update('none');
         };
         
-        const updateStatusIndicators = () => {
+      const updateStatusIndicators = () => {
             const currentTime = Date.now();
             const TIMEOUT_THRESHOLD = 5 * 60 * 1000; // 5 minutes - node dianggap offline jika tidak ada data lebih dari ini
             
@@ -573,7 +573,23 @@
                 const receivedAt = card.getAttribute('data-received-at');
                 if (!receivedAt) return;
                 
-                const lastDataReceived = new Date(receivedAt).getTime();
+                // Parse timestamp dengan benar - handle timezone UTC
+                let lastDataReceived;
+                try {
+                    // Pastikan timestamp di-parse sebagai UTC
+                    lastDataReceived = new Date(receivedAt).getTime();
+                    
+                    // Debug log - hapus setelah testing
+                    console.log('Device:', card.getAttribute('data-device-id'));
+                    console.log('Received at:', receivedAt);
+                    console.log('Parsed time:', new Date(lastDataReceived).toISOString());
+                    console.log('Current time:', new Date(currentTime).toISOString());
+                    console.log('Time diff (minutes):', Math.floor((currentTime - lastDataReceived) / 60000));
+                } catch (e) {
+                    console.error('Error parsing timestamp:', receivedAt, e);
+                    return;
+                }
+                
                 const timeDiff = currentTime - lastDataReceived;
                 
                 const statusText = card.querySelector('.status-text');
@@ -740,7 +756,7 @@
                 });
                 
                 // Initial status update after cards are rendered
-                setTimeout(updateStatusIndicators, 100);
+                setTimeout(Indicators, 100);
             }, 100);
         };
 
