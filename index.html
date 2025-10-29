@@ -423,7 +423,7 @@ const aggregateData = (data, intervalMinutes) => {
             });
         }
 
-        const group = grouped.get(key);
+  const group = grouped.get(key);
         if (record.co2_ppm !== null) group.co2_values.push(record.co2_ppm);
         if (record.h2s_ppm !== null) group.h2s_values.push(record.h2s_ppm);
         if (record.voltage !== null) group.voltage_values.push(record.voltage);
@@ -443,9 +443,6 @@ const aggregateData = (data, intervalMinutes) => {
             : 0
     })).sort((a, b) => new Date(a.received_at) - new Date(b.received_at));
 };
-
-
-
         const applySmoothing = (data, windowSize = 3) => {
             if (data.length < windowSize || !smoothingEnabled) return data;
             const smoothed = [...data];
