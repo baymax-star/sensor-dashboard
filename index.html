@@ -563,7 +563,7 @@
             chart.update('none');
         };
         
-      const updateStatusIndicators = () => {
+const updateStatusIndicators = () => {
             const currentTime = Date.now();
             const TIMEOUT_THRESHOLD = 5 * 60 * 1000; // 5 minutes - node dianggap offline jika tidak ada data lebih dari ini
             
@@ -573,18 +573,12 @@
                 const receivedAt = card.getAttribute('data-received-at');
                 if (!receivedAt) return;
                 
-                // Parse timestamp dengan benar - handle timezone UTC
+                // Parse timestamp dengan benar
                 let lastDataReceived;
                 try {
-                    // Pastikan timestamp di-parse sebagai UTC
+                    // Timestamp dari Supabase sudah dalam format UTC dengan timezone indicator
+                    // Contoh: "2025-10-29T18:02:46.067648+00:00"
                     lastDataReceived = new Date(receivedAt).getTime();
-                    
-                    // Debug log - hapus setelah testing
-                    console.log('Device:', card.getAttribute('data-device-id'));
-                    console.log('Received at:', receivedAt);
-                    console.log('Parsed time:', new Date(lastDataReceived).toISOString());
-                    console.log('Current time:', new Date(currentTime).toISOString());
-                    console.log('Time diff (minutes):', Math.floor((currentTime - lastDataReceived) / 60000));
                 } catch (e) {
                     console.error('Error parsing timestamp:', receivedAt, e);
                     return;
@@ -598,12 +592,20 @@
                 if (!statusText || !statusIndicator) return;
                 
                 // Simple logic: if (currentTime - lastDataReceived > TIMEOUT_THRESHOLD)
+                // Gunakan Math.abs untuk handle clock skew (negative time diff)
+                const absoluteTimeDiff = Math.abs(timeDiff);
+                
                 if (timeDiff > TIMEOUT_THRESHOLD) {
-                    // Node OFFLINE - data sudah lebih dari 5 menit
+                    // Node OFFLINE - data sudah lebih dari 5 menit yang lalu
+                    statusText.textContent = 'Offline';
+                    statusIndicator.classList.add('offline');
+                } else if (timeDiff < -TIMEOUT_THRESHOLD) {
+                    // Clock skew: timestamp di masa depan lebih dari 5 menit
+                    // Anggap offline karena ada masalah clock/timezone
                     statusText.textContent = 'Offline';
                     statusIndicator.classList.add('offline');
                 } else {
-                    // Node ONLINE - data masih fresh (< 5 menit)
+                    // Node ONLINE - data fresh atau clock skew minimal (dalam toleransi)
                     statusText.textContent = 'Online';
                     statusIndicator.classList.remove('offline');
                 }
