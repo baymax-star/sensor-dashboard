@@ -153,6 +153,7 @@
         }
         .status-indicator.offline {
             background-color: #e74c3c;
+            animation: none;
         }
         
         @keyframes pulse {
@@ -378,7 +379,10 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        let sensorData = [], updateInterval, smoothingEnabled = false;
+        let sensorData = [];
+        let updateInterval;
+        let statusUpdateInterval;
+        let smoothingEnabled = false;
         let deviceCharts = new Map();
 
         const formatTime = (timestamp) => timestamp ? new Date(timestamp).toLocaleString('id-ID', {
@@ -387,7 +391,8 @@
 
         const formatChartLabel = (timestamp) => new Date(timestamp).toLocaleTimeString('id-ID', { 
             hour: '2-digit', minute: '2-digit'
-        });      
+        });
+        
         const getBatteryPercent = (voltage) => voltage ? Math.min(100, Math.max(0, Math.round(((voltage - 2.5) / (3.3 - 2.5)) * 100))) : 0;
 
         const showError = (msg) => {
@@ -558,6 +563,34 @@
             chart.update('none');
         };
 
+        // Function to update only status indicators without re-rendering entire cards
+        const updateStatusIndicators = () => {
+            const currentTime = Date.now();
+            const nodeCards = document.querySelectorAll('.node-card');
+            
+            nodeCards.forEach(card => {
+                const receivedAt = card.getAttribute('data-received-at');
+                if (!receivedAt) return;
+                
+                const timeDiff = currentTime - new Date(receivedAt).getTime();
+                const isOnline = timeDiff < 2 * 60 * 1000; // 2 minutes threshold
+                const minutesAgo = Math.floor(timeDiff / 60000);
+                
+                const statusText = card.querySelector('.status-text');
+                const statusIndicator = card.querySelector('.status-indicator');
+                
+                if (statusText && statusIndicator) {
+                    statusText.textContent = isOnline ? 'Online' : `Offline (${minutesAgo}m ago)`;
+                    
+                    if (isOnline) {
+                        statusIndicator.classList.remove('offline');
+                    } else {
+                        statusIndicator.classList.add('offline');
+                    }
+                }
+            });
+        };
+
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
             const latestData = getLatestDataByDevice(sensorData);
@@ -572,13 +605,9 @@
             deviceCharts.clear();
 
             const intervalMinutes = parseInt(document.getElementById('interval').value);
-            const currentTime = Date.now(); // Get current time once for consistency
 
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
-                const timeDiff = device.received_at ? (currentTime - new Date(device.received_at).getTime()) : Infinity;
-                const isOnline = timeDiff < 2 * 60 * 1000; // 2 minutes threshold
-                const minutesAgo = Math.floor(timeDiff / 60000);
                 
                 // Determine status classes
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
@@ -644,12 +673,12 @@
                 }
                 
                 return `
-                    <div class="node-card">
+                    <div class="node-card" data-device-id="${device.device_id}" data-received-at="${device.received_at}">
                         <div class="node-header">
                             <h2>Node Sensor ${device.device_id}</h2>
                             <div class="node-status">
-                                <span>${isOnline ? 'Online' : 'Offline'}</span>
-                                <div class="status-indicator ${isOnline ? '' : 'offline'}"></div>
+                                <span class="status-text">Checking...</span>
+                                <div class="status-indicator"></div>
                             </div>
                         </div>
                         
@@ -707,6 +736,9 @@
                         updateMiniChart(chart, historyData);
                     }
                 });
+                
+                // Initial status update after cards are rendered
+                setTimeout(updateStatusIndicators, 100);
             }, 100);
         };
 
@@ -728,20 +760,31 @@
 
         const init = async () => {
             await loadSensorData();
+            
+            // Fetch new data from database every 30 seconds
             updateInterval = setInterval(loadSensorData, 30000);
+            
+            // Update status indicators every 5 seconds (without fetching data)
+            statusUpdateInterval = setInterval(() => {
+                updateStatusIndicators();
+            }, 5000);
         };
 
         window.addEventListener('beforeunload', () => {
             if (updateInterval) clearInterval(updateInterval);
+            if (statusUpdateInterval) clearInterval(statusUpdateInterval);
             deviceCharts.forEach(chart => chart.destroy());
         });
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 if (updateInterval) clearInterval(updateInterval);
+                if (statusUpdateInterval) clearInterval(statusUpdateInterval);
             } else {
                 updateInterval = setInterval(loadSensorData, 30000);
+                statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
                 loadSensorData();
+                updateStatusIndicators();
             }
         });
 
