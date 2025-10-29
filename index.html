@@ -384,9 +384,6 @@
         let statusUpdateInterval;
         let smoothingEnabled = false;
         let deviceCharts = new Map();
-        
-        // FIXED: Threshold sekarang 15 menit (sesuai dengan interval pengiriman data yang mungkin)
-        const ONLINE_THRESHOLD_MS = 15 * 60 * 1000; // 15 menit
 
         const formatTime = (timestamp) => timestamp ? new Date(timestamp).toLocaleString('id-ID', {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -405,21 +402,6 @@
         };
 
         const hideError = () => document.getElementById('error').style.display = 'none';
-
-        // FIXED: Fungsi untuk menghitung status online/offline
-        const calculateNodeStatus = (receivedAt) => {
-            const currentTime = Date.now();
-            const timeDiff = currentTime - new Date(receivedAt).getTime();
-            const isOnline = timeDiff < ONLINE_THRESHOLD_MS;
-            const minutesAgo = Math.floor(timeDiff / 60000);
-            
-            return {
-                isOnline,
-                statusText: isOnline ? 'Online' : `Offline`,
-                minutesAgo,
-                timeDiff
-            };
-        };
 
         const aggregateData = (data, intervalMinutes) => {
             const grouped = new Map();
@@ -581,29 +563,26 @@
             chart.update('none');
         };
 
-        // FIXED: Function to update only status indicators without re-rendering entire cards
+        // Function to update only status indicators without re-rendering entire cards
         const updateStatusIndicators = () => {
+            const currentTime = Date.now();
             const nodeCards = document.querySelectorAll('.node-card');
             
             nodeCards.forEach(card => {
                 const receivedAt = card.getAttribute('data-received-at');
                 if (!receivedAt) return;
                 
-                const statusInfo = calculateNodeStatus(receivedAt);
+                const timeDiff = currentTime - new Date(receivedAt).getTime();
+                const isOnline = timeDiff < 2 * 60 * 1000; // 2 minutes threshold
+                const minutesAgo = Math.floor(timeDiff / 60000);
                 
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
                 
                 if (statusText && statusIndicator) {
-                    // Update text with time info
-                    if (statusInfo.isOnline) {
-                        statusText.textContent = `Online (${statusInfo.minutesAgo}m ago)`;
-                    } else {
-                        statusText.textContent = `Offline (${statusInfo.minutesAgo}m ago)`;
-                    }
+                    statusText.textContent = isOnline ? 'Online' : `Offline (${minutesAgo}m ago)`;
                     
-                    // Update indicator class
-                    if (statusInfo.isOnline) {
+                    if (isOnline) {
                         statusIndicator.classList.remove('offline');
                     } else {
                         statusIndicator.classList.add('offline');
@@ -630,13 +609,6 @@
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
                 
-                // FIXED: Calculate initial status
-                const statusInfo = calculateNodeStatus(device.received_at);
-                const statusClass = statusInfo.isOnline ? '' : 'offline';
-                const initialStatusText = statusInfo.isOnline 
-                    ? `Online (${statusInfo.minutesAgo}m ago)` 
-                    : `Offline (${statusInfo.minutesAgo}m ago)`;
-                
                 // Determine status classes
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
                 const h2sClass = (device.h2s_ppm < 10) ? "good-level" : ((device.h2s_ppm < 20) ? "warning-level" : "danger-level");
@@ -644,39 +616,39 @@
                 
                 // Calculate node status
                 let nodeStatus = "Normal";
-                let nodeStatusClass = "good-level";
+                let statusClass = "good-level";
                 let alertCount = 0;
                 
                 if (device.co2_ppm > 2000) {
                     nodeStatus = "CRITICAL CO2";
-                    nodeStatusClass = "danger-level";
+                    statusClass = "danger-level";
                     alertCount++;
                 } else if (device.co2_ppm > 1000) {
                     nodeStatus = "Warning CO2";
-                    nodeStatusClass = "warning-level";
+                    statusClass = "warning-level";
                     alertCount++;
                 }
                 
                 if (device.h2s_ppm > 20) {
                     nodeStatus = "CRITICAL H2S";
-                    nodeStatusClass = "danger-level";
+                    statusClass = "danger-level";
                     alertCount++;
                 } else if (device.h2s_ppm > 10) {
-                    if (nodeStatusClass != "danger-level") {
+                    if (statusClass != "danger-level") {
                         nodeStatus = "Warning H2S";
-                        nodeStatusClass = "warning-level";
+                        statusClass = "warning-level";
                     }
                     alertCount++;
                 }
                 
                 if (batteryPercent < 20) {
                     nodeStatus = "Low Battery";
-                    nodeStatusClass = "danger-level";
+                    statusClass = "danger-level";
                     alertCount++;
                 } else if (batteryPercent < 30) {
-                    if (nodeStatusClass == "good-level") {
+                    if (statusClass == "good-level") {
                         nodeStatus = "Battery Warning";
-                        nodeStatusClass = "warning-level";
+                        statusClass = "warning-level";
                     }
                     alertCount++;
                 }
@@ -705,8 +677,8 @@
                         <div class="node-header">
                             <h2>Node Sensor ${device.device_id}</h2>
                             <div class="node-status">
-                                <span class="status-text">${initialStatusText}</span>
-                                <div class="status-indicator ${statusClass}"></div>
+                                <span class="status-text">Checking...</span>
+                                <div class="status-indicator"></div>
                             </div>
                         </div>
                         
@@ -735,7 +707,7 @@
                                 
                                 <!-- Status -->
                                 <div class="sensor-item status-item">
-                                    <div class="status-main ${nodeStatusClass}">${nodeStatus}</div>
+                                    <div class="status-main ${statusClass}">${nodeStatus}</div>
                                     <div class="status-details">${alertCount} Alert(s) Active</div>
                                     
                                     <div class="aqi-info">
@@ -743,3 +715,80 @@
                                         <div class="aqi-value ${aqiClass}">${aqi} (${aqiValue})</div>
                                     </div>
                                 </div>
+                                
+                                <!-- Mini Chart -->
+                                <div class="chart-container">
+                                    <canvas id="chart_${device.device_id}"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Create charts after DOM is updated
+            setTimeout(() => {
+                latestData.forEach(device => {
+                    const chart = createMiniChart(`chart_${device.device_id}`, device.device_id);
+                    if (chart) {
+                        deviceCharts.set(device.device_id, chart);
+                        const historyData = getDeviceHistoryData(device.device_id, intervalMinutes);
+                        updateMiniChart(chart, historyData);
+                    }
+                });
+                
+                // Initial status update after cards are rendered
+                setTimeout(updateStatusIndicators, 100);
+            }, 100);
+        };
+
+        const updateAllCharts = () => {
+            const intervalMinutes = parseInt(document.getElementById('interval').value);
+            deviceCharts.forEach((chart, deviceId) => {
+                const historyData = getDeviceHistoryData(deviceId, intervalMinutes);
+                updateMiniChart(chart, historyData);
+            });
+        };
+
+        const toggleSmoothing = () => {
+            smoothingEnabled = !smoothingEnabled;
+            document.getElementById('smoothBtn').textContent = smoothingEnabled ? 'Disable Smoothing' : 'Enable Smoothing';
+            updateAllCharts();
+        };
+
+        document.getElementById('interval').addEventListener('change', updateAllCharts);
+
+        const init = async () => {
+            await loadSensorData();
+            
+            // Fetch new data from database every 30 seconds
+            updateInterval = setInterval(loadSensorData, 30000);
+            
+            // Update status indicators every 5 seconds (without fetching data)
+            statusUpdateInterval = setInterval(() => {
+                updateStatusIndicators();
+            }, 5000);
+        };
+
+        window.addEventListener('beforeunload', () => {
+            if (updateInterval) clearInterval(updateInterval);
+            if (statusUpdateInterval) clearInterval(statusUpdateInterval);
+            deviceCharts.forEach(chart => chart.destroy());
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (updateInterval) clearInterval(updateInterval);
+                if (statusUpdateInterval) clearInterval(statusUpdateInterval);
+            } else {
+                updateInterval = setInterval(loadSensorData, 30000);
+                statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
+                loadSensorData();
+                updateStatusIndicators();
+            }
+        });
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
