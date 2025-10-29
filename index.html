@@ -553,39 +553,28 @@
             chart.update('none');
         };
         
-        // PERBAIKAN UTAMA: Fungsi status indicator yang benar
+
         const updateStatusIndicators = () => {
-            const currentTime = Date.now();
-            const TIMEOUT_THRESHOLD = 2 * 60 * 1000; // 
-            
-            latestDeviceData.forEach((deviceData, deviceId) => {
-                const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
-                if (!card) return;
-                
-                const statusText = card.querySelector('.status-text');
-                const statusIndicator = card.querySelector('.status-indicator');
-                
-                if (!statusText || !statusIndicator) return;
-                
-                try {
-                    const lastDataTime = new Date(deviceData.received_at).getTime();
-                    const timeDiff = currentTime - lastDataTime;
-                    
-                    // Cek apakah data masih fresh (kurang dari 5 menit)
-                    if (timeDiff > TIMEOUT_THRESHOLD) {
-                        statusText.textContent = 'Offline';
-                        statusIndicator.classList.add('offline');
-                    } else {
-                        statusText.textContent = 'Online';
-                        statusIndicator.classList.remove('offline');
-                    }
-                } catch (e) {
-                    console.error('Error updating status for device', deviceId, e);
-                    statusText.textContent = 'Error';
-                    statusIndicator.classList.add('offline');
-                }
-            });
-        };
+        if (latestDeviceData.size === 0) return;
+        const currentTime = Date.now();
+        latestDeviceData.forEach((deviceData, deviceId) => {
+            const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
+            if (!card) return;
+        
+            const statusText = card.querySelector('.status-text');
+            const statusIndicator = card.querySelector('.status-indicator');
+            const lastDataTime = new Date(deviceData.received_at).getTime();
+            const timeDiff = currentTime - lastDataTime;
+        
+            if (timeDiff > 5 * 60 * 1000) { 
+                statusText.textContent = 'Offline';
+                statusIndicator.classList.add('offline');
+            } else {
+                statusText.textContent = 'Online';
+                statusIndicator.classList.remove('offline');
+            }
+        });
+
 
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
