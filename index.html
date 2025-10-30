@@ -591,11 +591,11 @@ const aggregateData = (data, intervalMinutes) => {
                 statusIndicator.classList.remove('offline', 'online');
         
                 // Jika data lebih dari 5 menit = offline
-                if (isNaN(lastDataTime.getTime()) || timeDiffMs > 5 * 60 * 1000) {
-                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
+                if (isNaN(lastDataTime.getTime()) || timeDiffMs > 2 * 60 * 1000) {
+                    statusText.textContent = `Offline`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
+                    statusText.textContent = `Online`;
                     statusIndicator.classList.add('online');
                 }
             });
