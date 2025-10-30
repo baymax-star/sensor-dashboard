@@ -379,35 +379,18 @@
         let smoothingEnabled = false;
         let deviceCharts = new Map();
 
-        const toLocalTime = (timestamp) => {
-            if (!timestamp) return null;
-            const date = new Date(timestamp);
-            // Tambahkan offset UTC+7 (7 jam = 7 * 60 menit)
-            const offsetMinutes = 7 * 60;
-            const localTime = new Date(date.getTime() + offsetMinutes * 60 * 1000);
-            return localTime;
-        };
-
-        const formatTime = (timestamp) => {
+const formatTime = (timestamp) => {
             if (!timestamp) return 'N/A';
-            const date = toLocalTime(timestamp);
-            if (!date) return 'N/A';
-            const year = date.getUTCFullYear();
-            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(date.getUTCDate()).padStart(2, '0');
-            const hours = String(date.getUTCHours()).padStart(2, '0');
-            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-            const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            // Langsung tampilkan tanpa konversi karena database sudah WIB
+            return timestamp.replace('T', ' ').split('.')[0];
         };
 
         const formatChartLabel = (timestamp) => {
             if (!timestamp) return '';
-            const date = toLocalTime(timestamp);
-            if (!date) return '';
-            const hours = String(date.getUTCHours()).padStart(2, '0');
-            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-            return `${hours}:${minutes}`;
+            // Langsung ambil jam:menit tanpa konversi
+            const timePart = timestamp.split('T')[1];
+            if (!timePart) return '';
+            return timePart.substring(0, 5);
         };
             
         const getBatteryPercent = (voltage) => voltage ? Math.min(100, Math.max(0, Math.round(((voltage - 2.5) / (3.3 - 2.5)) * 100))) : 0;
