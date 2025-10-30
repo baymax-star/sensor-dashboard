@@ -572,7 +572,7 @@ const aggregateData = (data, intervalMinutes) => {
         };
         
 
-        const updateStatusIndicators = () => {
+ const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             const currentTime = new Date();
         
@@ -591,11 +591,11 @@ const aggregateData = (data, intervalMinutes) => {
                 statusIndicator.classList.remove('offline', 'online');
         
                 // Jika data lebih dari 5 menit = offline
-                if (isNaN(lastDataTime.getTime()) || timeDiffMs > 2 * 60 * 1000) {
-                    statusText.textContent = `Offline`;
+                if (isNaN(lastDataTime.getTime()) || timeDiffMs > 5 * 60 * 1000) {
+                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = `Online`;
+                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('online');
                 }
             });
