@@ -597,11 +597,12 @@
             chart.update('none');
         };
         
-       const updateStatusIndicators = () => {
+const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             
+            // Gunakan waktu WIB (UTC+7) untuk konsistensi dengan database
             const currentTime = new Date();
-
+            
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
                 if (!card) return;
@@ -611,7 +612,16 @@
                 
                 if (!statusText || !statusIndicator) return;
 
-                const lastDataTime = new Date(deviceData.received_at);
+                // Parse timestamp dari database (sudah dalam WIB)
+                // Tambahkan 'Z' agar browser tidak auto-convert ke local timezone
+                let lastDataTime = new Date(deviceData.received_at);
+                
+                // Jika timestamp tidak mengandung timezone info, anggap sebagai WIB
+                // dan konversi ke waktu lokal browser
+                if (!deviceData.received_at.includes('Z') && !deviceData.received_at.includes('+')) {
+                    // Database timestamp dalam WIB, tambahkan offset +7 jam
+                    lastDataTime = new Date(deviceData.received_at + '+07:00');
+                }
                 
                 if (isNaN(lastDataTime.getTime())) {
                     statusText.textContent = 'Unknown';
