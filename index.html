@@ -398,16 +398,11 @@
             return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         };
 
-        const formatChartLabel = (timestamp) => {
+       const formatChartLabel = (timestamp) => {
             if (!timestamp) return '';
-            const date = new Date(timestamp);
-            // Konversi ke timezone yang diinginkan
-            date.setHours(date.getHours() + TIMEZONE_OFFSET);
-            
-            const hours = String(date.getUTCHours()).padStart(2, '0');
-            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-            
-            return `${hours}:${minutes}`;
+            const timePart = timestamp.split('T')[1];
+            if (!timePart) return '';
+            return timePart.substring(0, 5);
         };
             
         const getBatteryPercent = (voltage) => voltage ? Math.min(100, Math.max(0, Math.round(((voltage - 2.5) / (3.3 - 2.5)) * 100))) : 0;
