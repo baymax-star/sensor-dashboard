@@ -800,7 +800,7 @@
         const init = async () => {
             await loadSensorData();
             updateInterval = setInterval(loadSensorData, 30000);
-            statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
+            statusUpdateInterval = setInterval(updateStatusIndicators, 30000);
         };
 
         window.addEventListener('beforeunload', () => {
