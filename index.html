@@ -379,9 +379,25 @@
         let smoothingEnabled = false;
         let deviceCharts = new Map();
 
+     const toUTC7 = (timestamp) => {
+            if (!timestamp) return null;
+            const date = new Date(timestamp);
+            // Convert to UTC+7
+            date.setHours(date.getHours() + 7);
+            return date;
+        };
+
         const formatTime = (timestamp) => {
             if (!timestamp) return 'N/A';
-            return timestamp.replace('T', ' ').split('.')[0];
+            const date = toUTC7(timestamp);
+            if (!date) return 'N/A';
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         };
 
         const formatChartLabel = (timestamp) => {
@@ -586,8 +602,7 @@
         const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             
-            // Ambil waktu sekarang dalam UTC
-            const currentTimeUTC = new Date().getTime();
+            const currentTime = Date.now();
 
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -598,8 +613,7 @@
                 
                 if (!statusText || !statusIndicator) return;
 
-                // Parse timestamp dari database (diasumsikan UTC, JavaScript akan parse sebagai UTC)
-                const lastDataTime = new Date(deviceData.received_at + 'Z').getTime();
+                const lastDataTime = new Date(deviceData.received_at).getTime();
                 
                 if (isNaN(lastDataTime)) {
                     statusText.textContent = 'Unknown';
@@ -607,19 +621,16 @@
                     return;
                 }
                 
-                const timeDiffMs = currentTimeUTC - lastDataTime;
+                const timeDiffMs = currentTime - lastDataTime;
                 const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
-
-                console.log(`Device ${deviceId}: DB time=${deviceData.received_at}, Current=${new Date().toISOString()}, Diff=${timeDiffMinutes} min`);
 
                 statusIndicator.classList.remove('offline', 'online');
 
-                // Jika lebih dari 5 menit, status offline
-                if (timeDiffMinutes > 5) {
-                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
+                if (timeDiffMs > 5 * 60 * 1000) {
+                    statusText.textContent = `Offline (${Math.abs(timeDiffMinutes)} min ago)`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
+                    statusText.textContent = `Online (${Math.abs(timeDiffMinutes)} min ago)`;
                     statusIndicator.classList.add('online');
                 }
             });
