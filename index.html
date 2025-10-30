@@ -572,9 +572,9 @@ const aggregateData = (data, intervalMinutes) => {
         };
         
 
-                const updateStatusIndicators = () => {
+        const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
-            const currentTime = Date.now();
+            const currentTime = new Date();
         
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -583,17 +583,19 @@ const aggregateData = (data, intervalMinutes) => {
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
         
-                // pastikan timestamp valid & sesuaikan timezone (+7 jam)
-                const lastDataTime = new Date(deviceData.received_at).getTime() + (7 * 60 * 60 * 1000);
-                const timeDiff = currentTime - lastDataTime;
+                // Parse received_at sebagai UTC dan konversi ke local time
+                const lastDataTime = new Date(deviceData.received_at);
+                const timeDiffMs = currentTime - lastDataTime;
+                const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
         
                 statusIndicator.classList.remove('offline', 'online');
         
-                if (isNaN(lastDataTime) || timeDiff > 5 * 60 * 1000) { // lebih dari 5 menit
-                    statusText.textContent = 'Offline';
+                // Jika data lebih dari 5 menit = offline
+                if (isNaN(lastDataTime.getTime()) || timeDiffMs > 5 * 60 * 1000) {
+                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = 'Online';
+                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('online');
                 }
             });
