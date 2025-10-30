@@ -379,19 +379,23 @@
         let smoothingEnabled = false;
         let deviceCharts = new Map();
 
-         const formatTime = (timestamp) => {
-        if (!timestamp) return 'N/A';
-        const date = new Date(timestamp);
-        return date.toLocaleString('id-ID', {
-            timeZone: 'Asia/Jakarta',  // Force ke WIB
-            day: '2-digit', 
-            month: '2-digit', 
-            year: 'numeric', 
-            hour: '2-digit', 
-            minute: '2-digit',
-            second: '2-digit'
-        }) + ' WIB';
-    };
+        const formatTime = (timestamp) => {
+            if (!timestamp) return 'N/A';
+            const date = new Date(timestamp);
+            
+            // Cek apakah date valid
+            if (isNaN(date.getTime())) return 'Invalid Date';
+            
+            return date.toLocaleString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            }) + ' WIB';
+        };
 
         const formatChartLabel = (timestamp) => {
         const date = new Date(timestamp);
@@ -468,10 +472,11 @@ const aggregateData = (data, intervalMinutes) => {
             }
             return smoothed;
         };
-
-       const loadSensorData = async () => {
+const loadSensorData = async () => {
     try {
         const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        
+        console.log('Fetching data from:', startTime);
         
         const { data, error } = await supabase
             .from('sensor_data_complete')
@@ -486,19 +491,25 @@ const aggregateData = (data, intervalMinutes) => {
             return;
         }
         
+        console.log('Data fetched:', data.length, 'records');
+        console.log('Latest data sample:', data[0]);
+        
         sensorData = data;
         
         const latest = getLatestDataByDevice(data);
         latestDeviceData.clear();
         latest.forEach(device => {
             latestDeviceData.set(device.device_id, device);
+            console.log(`Device ${device.device_id} latest:`, device.received_at);
         });
         
         renderSensorCards();
         
-        // Update waktu dengan WIB
+        // Update waktu dengan WIB - PERBAIKI INI
         const now = new Date();
-        document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(now)}`;
+        const formattedTime = formatTime(now);
+        console.log('Update time:', formattedTime);
+        document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formattedTime}`;
         
         hideError();
     } catch (error) {
@@ -594,12 +605,16 @@ const aggregateData = (data, intervalMinutes) => {
             chart.data.datasets[1].data = h2sData;
             chart.update('none');
         };
-        
 const updateStatusIndicators = () => {
     if (latestDeviceData.size === 0) return;
     
-    // PENTING: Ambil waktu WIB sekarang
     const currentTime = Date.now();
+    const currentDate = new Date(currentTime);
+    
+    // Debug: tampilkan waktu sekarang
+    console.log('=== UPDATE STATUS ===');
+    console.log('Current Time (WIB):', currentDate.toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}));
+    console.log('Current Time (millis):', currentTime);
 
     latestDeviceData.forEach((deviceData, deviceId) => {
         const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -610,10 +625,12 @@ const updateStatusIndicators = () => {
         
         if (!statusText || !statusIndicator) return;
 
-        // Parse timestamp dari database (UTC otomatis convert ke local time)
+        // Parse timestamp dari database
         const lastDataTime = new Date(deviceData.received_at).getTime();
+        const lastDataDate = new Date(lastDataTime);
         
         if (isNaN(lastDataTime)) {
+            console.error(`Node ${deviceId}: Invalid timestamp`, deviceData.received_at);
             statusText.textContent = 'Unknown';
             statusIndicator.classList.remove('online', 'offline');
             return;
@@ -622,10 +639,14 @@ const updateStatusIndicators = () => {
         const timeDiffMs = currentTime - lastDataTime;
         const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
 
-        // Debug log untuk cek
+        // Debug lengkap
         console.log(`Node ${deviceId}:`, {
-            dbTime: new Date(deviceData.received_at).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
-            currentTime: new Date(currentTime).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
+            rawTimestamp: deviceData.received_at,
+            parsedUTC: lastDataDate.toISOString(),
+            parsedWIB: lastDataDate.toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
+            lastDataMillis: lastDataTime,
+            currentMillis: currentTime,
+            diffMs: timeDiffMs,
             diffMinutes: timeDiffMinutes
         });
 
@@ -639,6 +660,8 @@ const updateStatusIndicators = () => {
             statusIndicator.classList.add('online');
         }
     });
+    
+    console.log('===================');
 };
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
