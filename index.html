@@ -406,7 +406,6 @@
 
         const hideError = () => document.getElementById('error').style.display = 'none';
 
-        // FIXED: Aggregasi dengan timezone yang konsisten
         const aggregateData = (data, intervalMinutes) => {
             const grouped = new Map();
             data.forEach(record => {
@@ -516,50 +515,52 @@
             const aggregated = aggregateData(deviceData, intervalMinutes);
             return applySmoothing(aggregated).slice(-20);
         };
-
-        // FIXED: Update status dengan timezone yang benar
+        
         const updateStatusIndicators = () => {
-            if (latestDeviceData.size === 0) return;
-            
-            const currentWIB = getCurrentWIB();
+    if (latestDeviceData.size === 0) return;
 
-            latestDeviceData.forEach((deviceData, deviceId) => {
-                const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
-                if (!card) return;
+    // Ambil waktu sekarang dalam zona WIB
+    const currentWIB = new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" });
+    const currentTime = new Date(currentWIB).getTime();
 
-                const statusText = card.querySelector('.status-text');
-                const statusIndicator = card.querySelector('.status-indicator');
-                const debugInfo = card.querySelector('.debug-info');
-                
-                if (!statusText || !statusIndicator) return;
+    latestDeviceData.forEach((deviceData, deviceId) => {
+        const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
+        if (!card) return;
 
-                const lastDataWIB = toWIB(deviceData.received_at);
-                
-                const timeDiffMs = currentWIB.getTime() - lastDataWIB.getTime();
-                const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
+        const statusText = card.querySelector('.status-text');
+        const statusIndicator = card.querySelector('.status-indicator');
+        if (!statusText || !statusIndicator) return;
 
-                // Update debug info
-                if (debugInfo) {
-                    debugInfo.innerHTML = `
-                        <strong>Debug Time Info:</strong><br>
-                        DB Time (UTC): ${new Date(deviceData.received_at).toISOString()}<br>
-                        DB Time (WIB): ${formatTime(deviceData.received_at)}<br>
-                        Current (WIB): ${formatTime(currentWIB)}<br>
-                        Diff: ${timeDiffMinutes} minutes
-                    `;
-                }
+        // Konversi waktu data dari UTC ke WIB
+        const receivedWIB = new Date(new Date(deviceData.received_at)
+            .toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
+        );
+        const lastDataTime = receivedWIB.getTime();
 
-                statusIndicator.classList.remove('offline', 'online');
+        // Hitung selisih waktu dalam menit
+        const diffMinutes = Math.floor((currentTime - lastDataTime) / (1000 * 60));
 
-                if (timeDiffMs > 5 * 60 * 1000) {
-                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
-                    statusIndicator.classList.add('offline');
-                } else {
-                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
-                    statusIndicator.classList.add('online');
-                }
-            });
-        };
+        // Log untuk debugging
+        console.log(`Node ${deviceId}:`, {
+            dbTimeUTC: deviceData.received_at,
+            dbTimeWIB: receivedWIB.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }),
+            currentTimeWIB: new Date(currentTime).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }),
+            diffMinutes
+        });
+
+        // Update indikator dan teks status
+        statusIndicator.classList.remove('offline', 'online');
+
+        if (diffMinutes > 5) {
+            statusText.textContent = `Offline (${diffMinutes} min ago)`;
+            statusIndicator.classList.add('offline');
+        } else {
+            statusText.textContent = `Online (${diffMinutes} min ago)`;
+            statusIndicator.classList.add('online');
+        }
+    });
+};
+
 
         const createMiniChart = (canvasId, deviceId) => {
             const ctx = document.getElementById(canvasId);
