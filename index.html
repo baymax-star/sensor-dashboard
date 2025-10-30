@@ -379,19 +379,19 @@
         let smoothingEnabled = false;
         let deviceCharts = new Map();
 
-       const formatTime = (timestamp) => {
+         const formatTime = (timestamp) => {
         if (!timestamp) return 'N/A';
         const date = new Date(timestamp);
         return date.toLocaleString('id-ID', {
-            timeZone: 'Asia/Jakarta',  // Tambahkan ini untuk WIB
+            timeZone: 'Asia/Jakarta',  // Force ke WIB
             day: '2-digit', 
             month: '2-digit', 
             year: 'numeric', 
             hour: '2-digit', 
             minute: '2-digit',
             second: '2-digit'
-            });
-        };
+        }) + ' WIB';
+    };
 
         const formatChartLabel = (timestamp) => {
         const date = new Date(timestamp);
@@ -469,34 +469,43 @@ const aggregateData = (data, intervalMinutes) => {
             return smoothed;
         };
 
-        const loadSensorData = async () => {
-            try {
-                const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-                const { data, error } = await supabase
-                    .from('sensor_data_complete')
-                    .select('*')
-                    .gte('received_at', startTime)
-                    .order('received_at', { ascending: false });
+       const loadSensorData = async () => {
+    try {
+        const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        
+        const { data, error } = await supabase
+            .from('sensor_data_complete')
+            .select('*')
+            .gte('received_at', startTime)
+            .order('received_at', { ascending: false });
 
-                if (error) throw new Error(`Database error: ${error.message}`);
-                
-                sensorData = data;
-                
-                const latest = getLatestDataByDevice(data);
-                latestDeviceData.clear();
-                latest.forEach(device => {
-                    latestDeviceData.set(device.device_id, device);
-                });
-                
-            renderSensorCards();
-            document.getElementById('lastUpdate').textContent =
-                `Terakhir diperbarui: ${formatTime(new Date())}`;
-            updateStatusIndicators();
-            hideError();
-            } catch (error) {
-                showError(`Gagal memuat data sensor: ${error.message}`);
-            }
-        };
+        if (error) throw new Error(`Database error: ${error.message}`);
+        
+        if (!data || data.length === 0) {
+            document.getElementById('sensorGrid').innerHTML = '<div class="no-data">Tidak ada data sensor dalam 24 jam terakhir</div>';
+            return;
+        }
+        
+        sensorData = data;
+        
+        const latest = getLatestDataByDevice(data);
+        latestDeviceData.clear();
+        latest.forEach(device => {
+            latestDeviceData.set(device.device_id, device);
+        });
+        
+        renderSensorCards();
+        
+        // Update waktu dengan WIB
+        const now = new Date();
+        document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(now)}`;
+        
+        hideError();
+    } catch (error) {
+        console.error('Load error:', error);
+        showError(`Gagal memuat data sensor: ${error.message}`);
+    }
+};
 
     const getLatestDataByDevice = (data) => {
     const deviceData = new Map();
@@ -589,7 +598,8 @@ const aggregateData = (data, intervalMinutes) => {
 const updateStatusIndicators = () => {
     if (latestDeviceData.size === 0) return;
     
-    const currentTime = Date.now(); // Waktu lokal browser (WIB)
+    // PENTING: Ambil waktu WIB sekarang
+    const currentTime = Date.now();
 
     latestDeviceData.forEach((deviceData, deviceId) => {
         const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -600,7 +610,7 @@ const updateStatusIndicators = () => {
         
         if (!statusText || !statusIndicator) return;
 
-        // Parse UTC dari database, otomatis convert ke WIB oleh browser
+        // Parse timestamp dari database (UTC otomatis convert ke local time)
         const lastDataTime = new Date(deviceData.received_at).getTime();
         
         if (isNaN(lastDataTime)) {
@@ -611,6 +621,13 @@ const updateStatusIndicators = () => {
         
         const timeDiffMs = currentTime - lastDataTime;
         const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
+
+        // Debug log untuk cek
+        console.log(`Node ${deviceId}:`, {
+            dbTime: new Date(deviceData.received_at).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
+            currentTime: new Date(currentTime).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
+            diffMinutes: timeDiffMinutes
+        });
 
         statusIndicator.classList.remove('offline', 'online');
 
