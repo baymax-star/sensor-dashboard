@@ -290,6 +290,17 @@
             border-radius: 8px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
+
+        .debug-info {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 0.7rem;
+            color: #856404;
+            grid-column: 1 / -1;
+        }
         
         @media (max-width: 1400px) {
             .main-dashboard {
@@ -301,33 +312,6 @@
             .main-dashboard {
                 grid-template-columns: 1fr;
             }
-            body {
-                padding: 5px;
-            }
-            header {
-                padding: 10px;
-            }
-            header h1 {
-                font-size: 1.5rem;
-            }
-            .node-content {
-                padding: 10px;
-            }
-            .sensor-grid {
-                gap: 8px;
-            }
-            .sensor-item {
-                padding: 8px;
-            }
-            .controls {
-                flex-direction: column;
-                align-items: center;
-            }
-        }
-        
-        html, body {
-            height: 100vh;
-            overflow-x: auto;
         }
     </style>
 </head>
@@ -373,19 +357,25 @@
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let sensorData = [];
-        let latestDeviceData = new Map(); // TAMBAHAN: Menyimpan data terbaru per device
+        let latestDeviceData = new Map();
         let updateInterval;
         let statusUpdateInterval;
         let smoothingEnabled = false;
         let deviceCharts = new Map();
 
+        // FIXED: Fungsi untuk convert UTC ke WIB secara konsisten
+        const toWIB = (utcTimestamp) => {
+            const date = new Date(utcTimestamp);
+            return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+        };
+
+        const getCurrentWIB = () => {
+            return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+        };
+
         const formatTime = (timestamp) => {
             if (!timestamp) return 'N/A';
             const date = new Date(timestamp);
-            
-            // Cek apakah date valid
-            if (isNaN(date.getTime())) return 'Invalid Date';
-            
             return date.toLocaleString('id-ID', {
                 timeZone: 'Asia/Jakarta',
                 day: '2-digit', 
@@ -398,11 +388,11 @@
         };
 
         const formatChartLabel = (timestamp) => {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString('id-ID', {
-            timeZone: 'Asia/Jakarta',  // Tambahkan ini untuk WIB
-            hour: '2-digit', 
-            minute: '2-digit'
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                hour: '2-digit', 
+                minute: '2-digit'
             });
         };
             
@@ -416,52 +406,53 @@
 
         const hideError = () => document.getElementById('error').style.display = 'none';
 
-const aggregateData = (data, intervalMinutes) => {
-    const grouped = new Map();
-    data.forEach(record => {
-        const time = new Date(record.received_at);
+        // FIXED: Aggregasi dengan timezone yang konsisten
+        const aggregateData = (data, intervalMinutes) => {
+            const grouped = new Map();
+            data.forEach(record => {
+                const wibTime = toWIB(record.received_at);
 
-        // Membulatkan waktu ke interval tertentu
-        const roundedTime = new Date(
-            time.getFullYear(),
-            time.getMonth(),
-            time.getDate(),
-            time.getHours(),
-            Math.floor(time.getMinutes() / intervalMinutes) * intervalMinutes
-        );
+                const roundedTime = new Date(
+                    wibTime.getFullYear(),
+                    wibTime.getMonth(),
+                    wibTime.getDate(),
+                    wibTime.getHours(),
+                    Math.floor(wibTime.getMinutes() / intervalMinutes) * intervalMinutes
+                );
 
-        const key = `${record.device_id}-${roundedTime.toISOString()}`;
+                const key = `${record.device_id}-${roundedTime.toISOString()}`;
 
-        if (!grouped.has(key)) {
-            grouped.set(key, {
-                device_id: record.device_id,
-                received_at: roundedTime.toISOString(),
-                co2_values: [],
-                h2s_values: [],
-                voltage_values: []
+                if (!grouped.has(key)) {
+                    grouped.set(key, {
+                        device_id: record.device_id,
+                        received_at: roundedTime.toISOString(),
+                        co2_values: [],
+                        h2s_values: [],
+                        voltage_values: []
+                    });
+                }
+
+                const group = grouped.get(key);
+                if (record.co2_ppm !== null) group.co2_values.push(record.co2_ppm);
+                if (record.h2s_ppm !== null) group.h2s_values.push(record.h2s_ppm);
+                if (record.voltage !== null) group.voltage_values.push(record.voltage);
             });
-        }
 
-  const group = grouped.get(key);
-        if (record.co2_ppm !== null) group.co2_values.push(record.co2_ppm);
-        if (record.h2s_ppm !== null) group.h2s_values.push(record.h2s_ppm);
-        if (record.voltage !== null) group.voltage_values.push(record.voltage);
-    });
+            return Array.from(grouped.values()).map(group => ({
+                device_id: group.device_id,
+                received_at: group.received_at,
+                co2_ppm: group.co2_values.length > 0
+                    ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length)
+                    : 0,
+                h2s_ppm: group.h2s_values.length > 0
+                    ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100
+                    : 0,
+                voltage: group.voltage_values.length > 0
+                    ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100
+                    : 0
+            })).sort((a, b) => new Date(a.received_at) - new Date(b.received_at));
+        };
 
-    return Array.from(grouped.values()).map(group => ({
-        device_id: group.device_id,
-        received_at: group.received_at,
-        co2_ppm: group.co2_values.length > 0
-            ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length)
-            : 0,
-        h2s_ppm: group.h2s_values.length > 0
-            ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100
-            : 0,
-        voltage: group.voltage_values.length > 0
-            ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100
-            : 0
-    })).sort((a, b) => new Date(a.received_at) - new Date(b.received_at));
-};
         const applySmoothing = (data, windowSize = 3) => {
             if (data.length < windowSize || !smoothingEnabled) return data;
             const smoothed = [...data];
@@ -472,66 +463,102 @@ const aggregateData = (data, intervalMinutes) => {
             }
             return smoothed;
         };
-const loadSensorData = async () => {
-    try {
-        const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        
-        console.log('Fetching data from:', startTime);
-        
-        const { data, error } = await supabase
-            .from('sensor_data_complete')
-            .select('*')
-            .gte('received_at', startTime)
-            .order('received_at', { ascending: false });
 
-        if (error) throw new Error(`Database error: ${error.message}`);
-        
-        if (!data || data.length === 0) {
-            document.getElementById('sensorGrid').innerHTML = '<div class="no-data">Tidak ada data sensor dalam 24 jam terakhir</div>';
-            return;
-        }
-        
-        console.log('Data fetched:', data.length, 'records');
-        console.log('Latest data sample:', data[0]);
-        
-        sensorData = data;
-        
-        const latest = getLatestDataByDevice(data);
-        latestDeviceData.clear();
-        latest.forEach(device => {
-            latestDeviceData.set(device.device_id, device);
-            console.log(`Device ${device.device_id} latest:`, device.received_at);
-        });
-        
-        renderSensorCards();
-        
-        // Update waktu dengan WIB - PERBAIKI INI
-        const now = new Date();
-        const formattedTime = formatTime(now);
-        console.log('Update time:', formattedTime);
-        document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formattedTime}`;
-        
-        hideError();
-    } catch (error) {
-        console.error('Load error:', error);
-        showError(`Gagal memuat data sensor: ${error.message}`);
-    }
-};
+        const loadSensorData = async () => {
+            try {
+                const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+                
+                const { data, error } = await supabase
+                    .from('sensor_data_complete')
+                    .select('*')
+                    .gte('received_at', startTime)
+                    .order('received_at', { ascending: false });
 
-    const getLatestDataByDevice = (data) => {
-    const deviceData = new Map();
-    data.forEach(record => {
-        const existing = deviceData.get(record.device_id);
-        if (!existing || new Date(record.received_at) > new Date(existing.received_at)) {
-            deviceData.set(record.device_id, record);
-        }
-    });
-    return Array.from(deviceData.values()).sort((a, b) => parseInt(a.device_id) - parseInt(b.device_id));
-    };
+                if (error) throw new Error(`Database error: ${error.message}`);
+                
+                if (!data || data.length === 0) {
+                    document.getElementById('sensorGrid').innerHTML = '<div class="no-data">Tidak ada data sensor dalam 24 jam terakhir</div>';
+                    return;
+                }
+                
+                sensorData = data;
+                
+                const latest = getLatestDataByDevice(data);
+                latestDeviceData.clear();
+                latest.forEach(device => {
+                    latestDeviceData.set(device.device_id, device);
+                });
+                
+                renderSensorCards();
+                
+                document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(new Date())}`;
+                
+                hideError();
+            } catch (error) {
+                console.error('Load error:', error);
+                showError(`Gagal memuat data sensor: ${error.message}`);
+            }
+        };
+
+        const getLatestDataByDevice = (data) => {
+            const deviceData = new Map();
+            data.forEach(record => {
+                const existing = deviceData.get(record.device_id);
+                if (!existing || new Date(record.received_at) > new Date(existing.received_at)) {
+                    deviceData.set(record.device_id, record);
+                }
+            });
+            return Array.from(deviceData.values()).sort((a, b) => parseInt(a.device_id) - parseInt(b.device_id));
+        };
+
         const getDeviceHistoryData = (deviceId, intervalMinutes) => {
             const deviceData = sensorData.filter(record => record.device_id === deviceId);
             const aggregated = aggregateData(deviceData, intervalMinutes);
             return applySmoothing(aggregated).slice(-20);
+        };
+
+        // FIXED: Update status dengan timezone yang benar
+        const updateStatusIndicators = () => {
+            if (latestDeviceData.size === 0) return;
+            
+            const currentWIB = getCurrentWIB();
+
+            latestDeviceData.forEach((deviceData, deviceId) => {
+                const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
+                if (!card) return;
+
+                const statusText = card.querySelector('.status-text');
+                const statusIndicator = card.querySelector('.status-indicator');
+                const debugInfo = card.querySelector('.debug-info');
+                
+                if (!statusText || !statusIndicator) return;
+
+                const lastDataWIB = toWIB(deviceData.received_at);
+                
+                const timeDiffMs = currentWIB.getTime() - lastDataWIB.getTime();
+                const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
+
+                // Update debug info
+                if (debugInfo) {
+                    debugInfo.innerHTML = `
+                        <strong>Debug Time Info:</strong><br>
+                        DB Time (UTC): ${new Date(deviceData.received_at).toISOString()}<br>
+                        DB Time (WIB): ${formatTime(deviceData.received_at)}<br>
+                        Current (WIB): ${formatTime(currentWIB)}<br>
+                        Diff: ${timeDiffMinutes} minutes
+                    `;
+                }
+
+                statusIndicator.classList.remove('offline', 'online');
+
+                if (timeDiffMs > 5 * 60 * 1000) {
+                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
+                    statusIndicator.classList.add('offline');
+                } else {
+                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
+                    statusIndicator.classList.add('online');
+                }
+            });
         };
 
         const createMiniChart = (canvasId, deviceId) => {
@@ -605,56 +632,7 @@ const loadSensorData = async () => {
             chart.data.datasets[1].data = h2sData;
             chart.update('none');
         };
-const updateStatusIndicators = () => {
-    if (latestDeviceData.size === 0) return;
-    
-    // PERBAIKAN: Gunakan new Date() untuk mendapatkan waktu lokal browser
-    const currentTime = new Date().getTime();
-
-    latestDeviceData.forEach((deviceData, deviceId) => {
-        const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
-        if (!card) return;
-
-        const statusText = card.querySelector('.status-text');
-        const statusIndicator = card.querySelector('.status-indicator');
         
-        if (!statusText || !statusIndicator) return;
-
-        // Parse timestamp dari database
-        // Supabase mengembalikan UTC, JavaScript otomatis convert ke local timezone
-        const lastDataTime = new Date(deviceData.received_at).getTime();
-        
-        if (isNaN(lastDataTime)) {
-            statusText.textContent = 'Unknown';
-            statusIndicator.classList.remove('online', 'offline');
-            return;
-        }
-        
-        const timeDiffMs = currentTime - lastDataTime;
-        const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
-
-        // Debug log - HAPUS setelah testing
-        console.log(`Node ${deviceId}:`, {
-            dbTime: new Date(lastDataTime).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
-            currentTime: new Date(currentTime).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
-            diffMinutes: timeDiffMinutes
-        });
-
-        statusIndicator.classList.remove('offline', 'online');
-
-        if (timeDiffMinutes < 0) {
-            // Data dari masa depan - ada masalah timezone
-            statusText.textContent = `Sync Error`;
-            statusIndicator.classList.add('offline');
-        } else if (timeDiffMs > 5 * 60 * 1000) {
-            statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
-            statusIndicator.classList.add('offline');
-        } else {
-            statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
-            statusIndicator.classList.add('online');
-        }
-    });
-};
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
             const latestData = Array.from(latestDeviceData.values()).sort((a, b) => 
@@ -773,6 +751,8 @@ const updateStatusIndicators = () => {
                                         <div class="aqi-value ${aqiClass}">${aqi} (${aqiValue})</div>
                                     </div>
                                 </div>
+
+                                <div class="debug-info"></div>
                                 
                                 <div class="chart-container">
                                     <canvas id="chart_${device.device_id}"></canvas>
