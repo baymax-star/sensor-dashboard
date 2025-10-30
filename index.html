@@ -586,7 +586,16 @@
         const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             
-            const currentTime = Date.now();
+            // Konversi waktu browser lokal ke UTC
+            const now = new Date();
+            const currentTimeUTC = Date.UTC(
+                now.getUTCFullYear(),
+                now.getUTCMonth(),
+                now.getUTCDate(),
+                now.getUTCHours(),
+                now.getUTCMinutes(),
+                now.getUTCSeconds()
+            );
 
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -597,6 +606,7 @@
                 
                 if (!statusText || !statusIndicator) return;
 
+                // Parse timestamp dari database (sudah dalam UTC)
                 const lastDataTime = new Date(deviceData.received_at).getTime();
                 
                 if (isNaN(lastDataTime)) {
@@ -605,7 +615,7 @@
                     return;
                 }
                 
-                const timeDiffMs = currentTime - lastDataTime;
+                const timeDiffMs = currentTimeUTC - lastDataTime;
                 const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
 
                 statusIndicator.classList.remove('offline', 'online');
