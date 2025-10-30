@@ -586,11 +586,10 @@ const aggregateData = (data, intervalMinutes) => {
             chart.update('none');
         };
         
-
 const updateStatusIndicators = () => {
     if (latestDeviceData.size === 0) return;
     
-    const currentTime = Date.now(); // Ini sudah benar, ambil waktu lokal browser
+    const currentTime = Date.now(); // Waktu lokal browser (WIB)
 
     latestDeviceData.forEach((deviceData, deviceId) => {
         const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -601,7 +600,7 @@ const updateStatusIndicators = () => {
         
         if (!statusText || !statusIndicator) return;
 
-        // Parse timestamp dari database (UTC) dan convert ke local time
+        // Parse UTC dari database, otomatis convert ke WIB oleh browser
         const lastDataTime = new Date(deviceData.received_at).getTime();
         
         if (isNaN(lastDataTime)) {
