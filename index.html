@@ -600,7 +600,7 @@
 const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             
-            // Gunakan waktu WIB (UTC+7) untuk konsistensi dengan database
+            // Dapatkan waktu sekarang
             const currentTime = new Date();
             
             latestDeviceData.forEach((deviceData, deviceId) => {
@@ -612,16 +612,16 @@ const updateStatusIndicators = () => {
                 
                 if (!statusText || !statusIndicator) return;
 
-                // Parse timestamp dari database (sudah dalam WIB)
-                // Tambahkan 'Z' agar browser tidak auto-convert ke local timezone
-                let lastDataTime = new Date(deviceData.received_at);
+                // Parse timestamp dari database
+                const lastDataTime = new Date(deviceData.received_at);
                 
-                // Jika timestamp tidak mengandung timezone info, anggap sebagai WIB
-                // dan konversi ke waktu lokal browser
-                if (!deviceData.received_at.includes('Z') && !deviceData.received_at.includes('+')) {
-                    // Database timestamp dalam WIB, tambahkan offset +7 jam
-                    lastDataTime = new Date(deviceData.received_at + '+07:00');
-                }
+                // DEBUG: Log untuk troubleshooting
+                console.log(`Device ${deviceId}:`, {
+                    rawTimestamp: deviceData.received_at,
+                    parsedTime: lastDataTime.toString(),
+                    currentTime: currentTime.toString(),
+                    diff: currentTime - lastDataTime
+                });
                 
                 if (isNaN(lastDataTime.getTime())) {
                     statusText.textContent = 'Unknown';
@@ -629,15 +629,22 @@ const updateStatusIndicators = () => {
                     return;
                 }
                 
-                // Hitung selisih waktu dalam menit
+                // Hitung selisih waktu dalam milidetik
                 const timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
-                const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
+                
+                // Konversi ke menit (gunakan Math.abs untuk menghindari nilai negatif)
+                const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / (60 * 1000));
 
                 // Hapus class sebelumnya
                 statusIndicator.classList.remove('offline', 'online');
 
-                // LOGIKA UTAMA: Cek apakah lebih dari 5 menit
-                if (timeDiffMinutes > 5) {
+                // Cek apakah waktu database di masa depan (indikasi timezone issue)
+                if (timeDiffMs < 0) {
+                    // Waktu database lebih baru dari waktu sekarang = timezone issue
+                    console.warn(`Device ${deviceId}: Timestamp is in the future! Possible timezone mismatch.`);
+                    statusText.textContent = `Online (0 min ago)`;
+                    statusIndicator.classList.add('online');
+                } else if (timeDiffMinutes > 5) {
                     // OFFLINE jika lebih dari 5 menit
                     statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('offline');
