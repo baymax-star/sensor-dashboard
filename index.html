@@ -572,35 +572,50 @@ const aggregateData = (data, intervalMinutes) => {
         };
         
 
- const updateStatusIndicators = () => {
-            if (latestDeviceData.size === 0) return;
-            const currentTime = new Date();
-        
-            latestDeviceData.forEach((deviceData, deviceId) => {
-                const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
-                if (!card) return;
-        
-                const statusText = card.querySelector('.status-text');
-                const statusIndicator = card.querySelector('.status-indicator');
-        
-                // Parse received_at sebagai UTC dan konversi ke local time
-                const lastDataTime = new Date(deviceData.received_at);
-                const timeDiffMs = currentTime - lastDataTime;
-                const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
-        
-                statusIndicator.classList.remove('offline', 'online');
-        
-                // Jika data lebih dari 5 menit = offline
-                if (isNaN(lastDataTime.getTime()) || timeDiffMs > 5 * 60 * 1000) {
-                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
-                    statusIndicator.classList.add('offline');
-                } else {
-                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
-                    statusIndicator.classList.add('online');
-                }
-            });
-        };
+const updateStatusIndicators = () => {
+    if (latestDeviceData.size === 0) return;
+    
+    const currentTime = Date.now();
 
+    latestDeviceData.forEach((deviceData, deviceId) => {
+        const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
+        if (!card) return;
+
+        const statusText = card.querySelector('.status-text');
+        const statusIndicator = card.querySelector('.status-indicator');
+        
+        if (!statusText || !statusIndicator) return;
+
+        // Parse timestamp - Supabase returns UTC timestamps
+        let lastDataTime;
+        if (deviceData.received_at.includes('Z') || deviceData.received_at.includes('+')) {
+            // Already has timezone info
+            lastDataTime = new Date(deviceData.received_at).getTime();
+        } else {
+            // Assume UTC and convert
+            lastDataTime = new Date(deviceData.received_at + 'Z').getTime();
+        }
+        
+        if (isNaN(lastDataTime)) {
+            statusText.textContent = 'Unknown';
+            statusIndicator.classList.remove('online', 'offline');
+            return;
+        }
+        
+        const timeDiffMs = currentTime - lastDataTime;
+        const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
+
+        statusIndicator.classList.remove('offline', 'online');
+
+        if (timeDiffMs > 5 * 60 * 1000) {
+            statusText.textContent = `Offline (${Math.abs(timeDiffMinutes)} min ago)`;
+            statusIndicator.classList.add('offline');
+        } else {
+            statusText.textContent = `Online (${Math.abs(timeDiffMinutes)} min ago)`;
+            statusIndicator.classList.add('online');
+        }
+    });
+};
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
             const latestData = Array.from(latestDeviceData.values()).sort((a, b) => 
