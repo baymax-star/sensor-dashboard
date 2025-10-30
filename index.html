@@ -597,10 +597,10 @@
             chart.update('none');
         };
         
-        const updateStatusIndicators = () => {
+       const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             
-            const currentTime = Date.now();
+            const currentTime = new Date();
 
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -611,24 +611,29 @@
                 
                 if (!statusText || !statusIndicator) return;
 
-                const lastDataTime = new Date(deviceData.received_at).getTime();
+                const lastDataTime = new Date(deviceData.received_at);
                 
-                if (isNaN(lastDataTime)) {
+                if (isNaN(lastDataTime.getTime())) {
                     statusText.textContent = 'Unknown';
                     statusIndicator.classList.remove('online', 'offline');
                     return;
                 }
                 
-                const timeDiffMs = currentTime - lastDataTime;
+                // Hitung selisih waktu dalam menit
+                const timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
                 const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
 
+                // Hapus class sebelumnya
                 statusIndicator.classList.remove('offline', 'online');
 
-                if (timeDiffMs > 5 * 60 * 1000) {
-                    statusText.textContent = `Offline (${Math.abs(timeDiffMinutes)} min ago)`;
+                // LOGIKA UTAMA: Cek apakah lebih dari 5 menit
+                if (timeDiffMinutes > 5) {
+                    // OFFLINE jika lebih dari 5 menit
+                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = `Online (${Math.abs(timeDiffMinutes)} min ago)`;
+                    // ONLINE jika 5 menit atau kurang
+                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('online');
                 }
             });
