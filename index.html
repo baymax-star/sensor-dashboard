@@ -586,16 +586,8 @@
         const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             
-            // Konversi waktu browser lokal ke UTC
-            const now = new Date();
-            const currentTimeUTC = Date.UTC(
-                now.getUTCFullYear(),
-                now.getUTCMonth(),
-                now.getUTCDate(),
-                now.getUTCHours(),
-                now.getUTCMinutes(),
-                now.getUTCSeconds()
-            );
+            // Ambil waktu sekarang dalam UTC
+            const currentTimeUTC = new Date().getTime();
 
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -606,8 +598,8 @@
                 
                 if (!statusText || !statusIndicator) return;
 
-                // Parse timestamp dari database (sudah dalam UTC)
-                const lastDataTime = new Date(deviceData.received_at).getTime();
+                // Parse timestamp dari database (diasumsikan UTC, JavaScript akan parse sebagai UTC)
+                const lastDataTime = new Date(deviceData.received_at + 'Z').getTime();
                 
                 if (isNaN(lastDataTime)) {
                     statusText.textContent = 'Unknown';
@@ -618,13 +610,16 @@
                 const timeDiffMs = currentTimeUTC - lastDataTime;
                 const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
 
+                console.log(`Device ${deviceId}: DB time=${deviceData.received_at}, Current=${new Date().toISOString()}, Diff=${timeDiffMinutes} min`);
+
                 statusIndicator.classList.remove('offline', 'online');
 
-                if (timeDiffMs > 5 * 60 * 1000) {
-                    statusText.textContent = `Offline (${Math.abs(timeDiffMinutes)} min ago)`;
+                // Jika lebih dari 5 menit, status offline
+                if (timeDiffMinutes > 5) {
+                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = `Online (${Math.abs(timeDiffMinutes)} min ago)`;
+                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('online');
                 }
             });
