@@ -608,13 +608,8 @@ const loadSensorData = async () => {
 const updateStatusIndicators = () => {
     if (latestDeviceData.size === 0) return;
     
-    const currentTime = Date.now();
-    const currentDate = new Date(currentTime);
-    
-    // Debug: tampilkan waktu sekarang
-    console.log('=== UPDATE STATUS ===');
-    console.log('Current Time (WIB):', currentDate.toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}));
-    console.log('Current Time (millis):', currentTime);
+    // PERBAIKAN: Gunakan new Date() untuk mendapatkan waktu lokal browser
+    const currentTime = new Date().getTime();
 
     latestDeviceData.forEach((deviceData, deviceId) => {
         const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
@@ -626,11 +621,10 @@ const updateStatusIndicators = () => {
         if (!statusText || !statusIndicator) return;
 
         // Parse timestamp dari database
+        // Supabase mengembalikan UTC, JavaScript otomatis convert ke local timezone
         const lastDataTime = new Date(deviceData.received_at).getTime();
-        const lastDataDate = new Date(lastDataTime);
         
         if (isNaN(lastDataTime)) {
-            console.error(`Node ${deviceId}: Invalid timestamp`, deviceData.received_at);
             statusText.textContent = 'Unknown';
             statusIndicator.classList.remove('online', 'offline');
             return;
@@ -639,29 +633,27 @@ const updateStatusIndicators = () => {
         const timeDiffMs = currentTime - lastDataTime;
         const timeDiffMinutes = Math.floor(timeDiffMs / (60 * 1000));
 
-        // Debug lengkap
+        // Debug log - HAPUS setelah testing
         console.log(`Node ${deviceId}:`, {
-            rawTimestamp: deviceData.received_at,
-            parsedUTC: lastDataDate.toISOString(),
-            parsedWIB: lastDataDate.toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
-            lastDataMillis: lastDataTime,
-            currentMillis: currentTime,
-            diffMs: timeDiffMs,
+            dbTime: new Date(lastDataTime).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
+            currentTime: new Date(currentTime).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}),
             diffMinutes: timeDiffMinutes
         });
 
         statusIndicator.classList.remove('offline', 'online');
 
-        if (timeDiffMs > 5 * 60 * 1000) {
-            statusText.textContent = `Offline (${Math.abs(timeDiffMinutes)} min ago)`;
+        if (timeDiffMinutes < 0) {
+            // Data dari masa depan - ada masalah timezone
+            statusText.textContent = `Sync Error`;
+            statusIndicator.classList.add('offline');
+        } else if (timeDiffMs > 5 * 60 * 1000) {
+            statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
             statusIndicator.classList.add('offline');
         } else {
-            statusText.textContent = `Online (${Math.abs(timeDiffMinutes)} min ago)`;
+            statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
             statusIndicator.classList.add('online');
         }
     });
-    
-    console.log('===================');
 };
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
