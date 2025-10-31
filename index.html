@@ -588,11 +588,11 @@
                 if (timeDiffMs < 0 && timeDiffMs > -120000) {
                     statusText.textContent = `Online (just now)`;
                     statusIndicator.classList.add('online');
-                } else if (timeDiffMinutes > 5) {
-                    statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
+                } else if (timeDiffMinutes > 2) {
+                    statusText.textContent = `Offline`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
+                    statusText.textContent = `Online`;
                     statusIndicator.classList.add('online');
                 }
             });
