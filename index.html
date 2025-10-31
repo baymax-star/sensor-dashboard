@@ -379,24 +379,19 @@
         let smoothingEnabled = false;
         let deviceCharts = new Map();
 
-
-const TIMEZONE_OFFSET = 7;
-        
         const formatTime = (timestamp) => {
             if (!timestamp) return 'N/A';
             const date = new Date(timestamp);
-            
-            // Langsung gunakan getFullYear, getMonth, dll (sudah dalam local timezone)
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             const hours = String(date.getHours()).padStart(2, '0');
             const minutes = String(date.getMinutes()).padStart(2, '0');
             const seconds = String(date.getSeconds()).padStart(2, '0');
-            
             return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         };
-       const formatChartLabel = (timestamp) => {
+
+        const formatChartLabel = (timestamp) => {
             if (!timestamp) return '';
             const timePart = timestamp.split('T')[1];
             if (!timePart) return '';
@@ -424,9 +419,7 @@ const TIMEZONE_OFFSET = 7;
                     time.getHours(),
                     Math.floor(time.getMinutes() / intervalMinutes) * intervalMinutes
                 );
-
                 const key = `${record.device_id}-${roundedTime.toISOString()}`;
-
                 if (!grouped.has(key)) {
                     grouped.set(key, {
                         device_id: record.device_id,
@@ -436,25 +429,17 @@ const TIMEZONE_OFFSET = 7;
                         voltage_values: []
                     });
                 }
-
                 const group = grouped.get(key);
                 if (record.co2_ppm !== null) group.co2_values.push(record.co2_ppm);
                 if (record.h2s_ppm !== null) group.h2s_values.push(record.h2s_ppm);
                 if (record.voltage !== null) group.voltage_values.push(record.voltage);
             });
-
             return Array.from(grouped.values()).map(group => ({
                 device_id: group.device_id,
                 received_at: group.received_at,
-                co2_ppm: group.co2_values.length > 0
-                    ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length)
-                    : 0,
-                h2s_ppm: group.h2s_values.length > 0
-                    ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100
-                    : 0,
-                voltage: group.voltage_values.length > 0
-                    ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100
-                    : 0
+                co2_ppm: group.co2_values.length > 0 ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length) : 0,
+                h2s_ppm: group.h2s_values.length > 0 ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100 : 0,
+                voltage: group.voltage_values.length > 0 ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100 : 0
             })).sort((a, b) => new Date(a.received_at) - new Date(b.received_at));
         };
 
@@ -472,33 +457,19 @@ const TIMEZONE_OFFSET = 7;
         const loadSensorData = async () => {
             try {
                 const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-                
-                const { data, error } = await supabase
-                    .from('sensor_data_complete')
-                    .select('*')
-                    .gte('received_at', startTime)
-                    .order('received_at', { ascending: false });
-
+                const { data, error } = await supabase.from('sensor_data_complete').select('*').gte('received_at', startTime).order('received_at', { ascending: false });
                 if (error) throw new Error(`Database error: ${error.message}`);
-                
                 if (!data || data.length === 0) {
                     document.getElementById('sensorGrid').innerHTML = '<div class="no-data">Tidak ada data sensor dalam 24 jam terakhir</div>';
                     return;
                 }
-                
                 sensorData = data;
-                
                 const latest = getLatestDataByDevice(data);
                 latestDeviceData.clear();
-                latest.forEach(device => {
-                    latestDeviceData.set(device.device_id, device);
-                });
-                
+                latest.forEach(device => latestDeviceData.set(device.device_id, device));
                 renderSensorCards();
-                
                 const now = new Date().toISOString();
                 document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(now)}`;
-                
                 hideError();
             } catch (error) {
                 console.error('Load error:', error);
@@ -523,10 +494,9 @@ const TIMEZONE_OFFSET = 7;
             return applySmoothing(aggregated).slice(-20);
         };
 
-        const createMiniChart = (canvasId, deviceId) => {
+        const createMiniChart = (canvasId) => {
             const ctx = document.getElementById(canvasId);
             if (!ctx) return null;
-
             return new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -553,29 +523,10 @@ const TIMEZONE_OFFSET = 7;
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { 
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                usePointStyle: true,
-                                pointStyle: 'line',
-                                font: { size: 10 }
-                            }
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: 'white',
-                            bodyColor: 'white',
-                            titleFont: { size: 11 },
-                            bodyFont: { size: 10 }
-                        }
+                        legend: { display: true, position: 'top', labels: { usePointStyle: true, pointStyle: 'line', font: { size: 10 } } },
+                        tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0, 0, 0, 0.8)', titleColor: 'white', bodyColor: 'white', titleFont: { size: 11 }, bodyFont: { size: 10 } }
                     },
-                    scales: {
-                        x: { display: false },
-                        y: { display: false, beginAtZero: true }
-                    },
+                    scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
                     elements: { point: { radius: 0 } },
                     interaction: { mode: 'index', intersect: false }
                 }
@@ -584,70 +535,44 @@ const TIMEZONE_OFFSET = 7;
 
         const updateMiniChart = (chart, data) => {
             if (!chart || !data.length) return;
-
             const labels = data.map(d => formatChartLabel(d.received_at));
             const co2Data = data.map(d => d.co2_ppm || 0);
             const h2sData = data.map(d => d.h2s_ppm || 0);
-
             chart.data.labels = labels;
             chart.data.datasets[0].data = co2Data;
             chart.data.datasets[1].data = h2sData;
             chart.update('none');
         };
         
-const updateStatusIndicators = () => {
+        const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
-            
-            // Dapatkan waktu sekarang
             const currentTime = new Date();
-            
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
                 if (!card) return;
-
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
-                
                 if (!statusText || !statusIndicator) return;
-
-                // Parse timestamp dari database
-                const lastDataTime = new Date(deviceData.received_at);
-                
-                // DEBUG: Log untuk troubleshooting
-                console.log(`Device ${deviceId}:`, {
-                    rawTimestamp: deviceData.received_at,
-                    parsedTime: lastDataTime.toString(),
-                    currentTime: currentTime.toString(),
-                    diff: currentTime - lastDataTime
-                });
-                
+                let lastDataTime = new Date(deviceData.received_at);
                 if (isNaN(lastDataTime.getTime())) {
                     statusText.textContent = 'Unknown';
                     statusIndicator.classList.remove('online', 'offline');
                     return;
                 }
-                
-                // Hitung selisih waktu dalam milidetik
-                const timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
-                
-                // Konversi ke menit (gunakan Math.abs untuk menghindari nilai negatif)
-                const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / (60 * 1000));
-
-                // Hapus class sebelumnya
+                let timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
+                if (timeDiffMs < -300000) {
+                    lastDataTime = new Date(lastDataTime.getTime() - (7 * 60 * 60 * 1000));
+                    timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
+                }
+                const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / 60000);
                 statusIndicator.classList.remove('offline', 'online');
-
-                // Cek apakah waktu database di masa depan (indikasi timezone issue)
-                if (timeDiffMs < 0) {
-                    // Waktu database lebih baru dari waktu sekarang = timezone issue
-                    console.warn(`Device ${deviceId}: Timestamp is in the future! Possible timezone mismatch.`);
-                    statusText.textContent = `Online (0 min ago)`;
+                if (timeDiffMs < 0 && timeDiffMs > -120000) {
+                    statusText.textContent = `Online (just now)`;
                     statusIndicator.classList.add('online');
                 } else if (timeDiffMinutes > 5) {
-                    // OFFLINE jika lebih dari 5 menit
                     statusText.textContent = `Offline (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    // ONLINE jika 5 menit atau kurang
                     statusText.textContent = `Online (${timeDiffMinutes} min ago)`;
                     statusIndicator.classList.add('online');
                 }
@@ -656,142 +581,41 @@ const updateStatusIndicators = () => {
 
         const renderSensorCards = () => {
             const gridEl = document.getElementById('sensorGrid');
-            const latestData = Array.from(latestDeviceData.values()).sort((a, b) => 
-                parseInt(a.device_id) - parseInt(b.device_id)
-            );
-            
+            const latestData = Array.from(latestDeviceData.values()).sort((a, b) => parseInt(a.device_id) - parseInt(b.device_id));
             if (latestData.length === 0) {
                 gridEl.innerHTML = '<div class="no-data">Tidak ada data sensor tersedia</div>';
                 return;
             }
-
             deviceCharts.forEach(chart => chart.destroy());
             deviceCharts.clear();
-
             const intervalMinutes = parseInt(document.getElementById('interval').value);
-
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
-                
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
                 const h2sClass = (device.h2s_ppm < 10) ? "good-level" : ((device.h2s_ppm < 20) ? "warning-level" : "danger-level");
                 const batteryClass = (batteryPercent > 50) ? "good-level" : ((batteryPercent > 20) ? "warning-level" : "danger-level");
-                
-                let nodeStatus = "Normal";
-                let statusClass = "good-level";
-                let alertCount = 0;
-                
-                if (device.co2_ppm > 2000) {
-                    nodeStatus = "CRITICAL CO2";
-                    statusClass = "danger-level";
-                    alertCount++;
-                } else if (device.co2_ppm > 1000) {
-                    nodeStatus = "Warning CO2";
-                    statusClass = "warning-level";
-                    alertCount++;
-                }
-                
-                if (device.h2s_ppm > 20) {
-                    nodeStatus = "CRITICAL H2S";
-                    statusClass = "danger-level";
-                    alertCount++;
-                } else if (device.h2s_ppm > 10) {
-                    if (statusClass != "danger-level") {
-                        nodeStatus = "Warning H2S";
-                        statusClass = "warning-level";
-                    }
-                    alertCount++;
-                }
-                
-                if (batteryPercent < 20) {
-                    nodeStatus = "Low Battery";
-                    statusClass = "danger-level";
-                    alertCount++;
-                } else if (batteryPercent < 30) {
-                    if (statusClass == "good-level") {
-                        nodeStatus = "Battery Warning";
-                        statusClass = "warning-level";
-                    }
-                    alertCount++;
-                }
-                
-                let aqi = "Good";
-                let aqiClass = "good-level";
-                let aqiValue = 50;
-                
-                if (device.co2_ppm > 2000 || device.h2s_ppm > 20) {
-                    aqi = "Hazardous";
-                    aqiClass = "danger-level";
-                    aqiValue = 300;
-                } else if (device.co2_ppm > 1500 || device.h2s_ppm > 15) {
-                    aqi = "Unhealthy";
-                    aqiClass = "danger-level";
-                    aqiValue = 200;
-                } else if (device.co2_ppm > 1000 || device.h2s_ppm > 10) {
-                    aqi = "Moderate";
-                    aqiClass = "warning-level";
-                    aqiValue = 100;
-                }
-                
-                return `
-                    <div class="node-card" data-device-id="${device.device_id}">
-                        <div class="node-header">
-                            <h2>Node Sensor ${device.device_id}</h2>
-                            <div class="node-status">
-                                <span class="status-text">Checking...</span>
-                                <div class="status-indicator"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="node-content">
-                            <div class="sensor-grid">
-                                <div class="sensor-item">
-                                    <div class="sensor-label">CO₂</div>
-                                    <div class="sensor-value ${co2Class}">${device.co2_ppm || 0}</div>
-                                    <div class="sensor-unit">PPM</div>
-                                </div>
-                                
-                                <div class="sensor-item">
-                                    <div class="sensor-label">H₂S</div>
-                                    <div class="sensor-value ${h2sClass}">${device.h2s_ppm || 0}</div>
-                                    <div class="sensor-unit">PPM</div>
-                                </div>
-                                
-                                <div class="sensor-item">
-                                    <div class="sensor-label">Battery</div>
-                                    <div class="sensor-value ${batteryClass}">${batteryPercent}</div>
-                                    <div class="sensor-unit">%</div>
-                                </div>
-                                
-                                <div class="sensor-item status-item">
-                                    <div class="status-main ${statusClass}">${nodeStatus}</div>
-                                    <div class="status-details">${alertCount} Alert(s) Active</div>
-                                    
-                                    <div class="aqi-info">
-                                        <div class="aqi-label">Air Quality Index</div>
-                                        <div class="aqi-value ${aqiClass}">${aqi} (${aqiValue})</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="chart-container">
-                                    <canvas id="chart_${device.device_id}"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                let nodeStatus = "Normal", statusClass = "good-level", alertCount = 0;
+                if (device.co2_ppm > 2000) { nodeStatus = "CRITICAL CO2"; statusClass = "danger-level"; alertCount++; } 
+                else if (device.co2_ppm > 1000) { nodeStatus = "Warning CO2"; statusClass = "warning-level"; alertCount++; }
+                if (device.h2s_ppm > 20) { nodeStatus = "CRITICAL H2S"; statusClass = "danger-level"; alertCount++; } 
+                else if (device.h2s_ppm > 10) { if (statusClass != "danger-level") { nodeStatus = "Warning H2S"; statusClass = "warning-level"; } alertCount++; }
+                if (batteryPercent < 20) { nodeStatus = "Low Battery"; statusClass = "danger-level"; alertCount++; } 
+                else if (batteryPercent < 30) { if (statusClass == "good-level") { nodeStatus = "Battery Warning"; statusClass = "warning-level"; } alertCount++; }
+                let aqi = "Good", aqiClass = "good-level", aqiValue = 50;
+                if (device.co2_ppm > 2000 || device.h2s_ppm > 20) { aqi = "Hazardous"; aqiClass = "danger-level"; aqiValue = 300; } 
+                else if (device.co2_ppm > 1500 || device.h2s_ppm > 15) { aqi = "Unhealthy"; aqiClass = "danger-level"; aqiValue = 200; } 
+                else if (device.co2_ppm > 1000 || device.h2s_ppm > 10) { aqi = "Moderate"; aqiClass = "warning-level"; aqiValue = 100; }
+                return `<div class="node-card" data-device-id="${device.device_id}"><div class="node-header"><h2>Node Sensor ${device.device_id}</h2><div class="node-status"><span class="status-text">Checking...</span><div class="status-indicator"></div></div></div><div class="node-content"><div class="sensor-grid"><div class="sensor-item"><div class="sensor-label">CO₂</div><div class="sensor-value ${co2Class}">${device.co2_ppm || 0}</div><div class="sensor-unit">PPM</div></div><div class="sensor-item"><div class="sensor-label">H₂S</div><div class="sensor-value ${h2sClass}">${device.h2s_ppm || 0}</div><div class="sensor-unit">PPM</div></div><div class="sensor-item"><div class="sensor-label">Battery</div><div class="sensor-value ${batteryClass}">${batteryPercent}</div><div class="sensor-unit">%</div></div><div class="sensor-item status-item"><div class="status-main ${statusClass}">${nodeStatus}</div><div class="status-details">${alertCount} Alert(s) Active</div><div class="aqi-info"><div class="aqi-label">Air Quality Index</div><div class="aqi-value ${aqiClass}">${aqi} (${aqiValue})</div></div></div><div class="chart-container"><canvas id="chart_${device.device_id}"></canvas></div></div></div></div>`;
             }).join('');
-
             setTimeout(() => {
                 latestData.forEach(device => {
-                    const chart = createMiniChart(`chart_${device.device_id}`, device.device_id);
+                    const chart = createMiniChart(`chart_${device.device_id}`);
                     if (chart) {
                         deviceCharts.set(device.device_id, chart);
                         const historyData = getDeviceHistoryData(device.device_id, intervalMinutes);
                         updateMiniChart(chart, historyData);
                     }
                 });
-                
                 setTimeout(updateStatusIndicators, 200);
             }, 100);
         };
