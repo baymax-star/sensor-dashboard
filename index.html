@@ -65,13 +65,7 @@
             gap: 8px;
         }
         
-        .control label {
-            font-size: 0.9rem;
-            color: #495057;
-            font-weight: 600;
-        }
-        
-        .control select, .control button {
+        .control button {
             padding: 8px 16px;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -79,31 +73,14 @@
             color: #374151;
             font-size: 0.9rem;
             transition: all 0.2s ease;
-        }
-        
-        .control select:focus, .control button:focus {
-            outline: none;
-            border-color: #007bff;
-        }
-        
-        .control button {
-            background-color: #007bff;
+            background-color: #28a745;
             color: white;
-            border-color: #007bff;
+            border-color: #28a745;
             cursor: pointer;
         }
         
         .control button:hover {
-            background-color: #0056b3;
-        }
-        
-        .btn-success {
-            background-color: #28a745 !important;
-            border-color: #28a745 !important;
-        }
-        
-        .btn-success:hover {
-            background-color: #1e7e34 !important;
+            background-color: #1e7e34;
         }
         
         .main-dashboard {
@@ -340,19 +317,7 @@
 
         <div class="controls">
             <div class="control">
-                <label>Interval:</label>
-                <select id="interval">
-                    <option value="5">5 Menit</option>
-                    <option value="15" selected>15 Menit</option>
-                    <option value="30">30 Menit</option>
-                    <option value="60">1 Jam</option>
-                </select>
-            </div>
-            <div class="control">
-                <button onclick="toggleSmoothing()" id="smoothBtn">Enable Smoothing</button>
-            </div>
-            <div class="control">
-                <button onclick="loadSensorData()" id="refreshBtn" class="btn-success">Refresh Data</button>
+                <button onclick="loadSensorData()" id="refreshBtn">Refresh Data</button>
             </div>
         </div>
 
@@ -376,7 +341,6 @@
         let latestDeviceData = new Map();
         let updateInterval;
         let statusUpdateInterval;
-        let smoothingEnabled = false;
         let deviceCharts = new Map();
 
         const formatTime = (timestamp) => {
@@ -408,52 +372,6 @@
 
         const hideError = () => document.getElementById('error').style.display = 'none';
 
-        const aggregateData = (data, intervalMinutes) => {
-            const grouped = new Map();
-            data.forEach(record => {
-                const time = new Date(record.received_at);
-                const roundedTime = new Date(
-                    time.getFullYear(),
-                    time.getMonth(),
-                    time.getDate(),
-                    time.getHours(),
-                    Math.floor(time.getMinutes() / intervalMinutes) * intervalMinutes
-                );
-                const key = `${record.device_id}-${roundedTime.toISOString()}`;
-                if (!grouped.has(key)) {
-                    grouped.set(key, {
-                        device_id: record.device_id,
-                        received_at: roundedTime.toISOString(),
-                        co2_values: [],
-                        h2s_values: [],
-                        voltage_values: []
-                    });
-                }
-                const group = grouped.get(key);
-                if (record.co2_ppm !== null) group.co2_values.push(record.co2_ppm);
-                if (record.h2s_ppm !== null) group.h2s_values.push(record.h2s_ppm);
-                if (record.voltage !== null) group.voltage_values.push(record.voltage);
-            });
-            return Array.from(grouped.values()).map(group => ({
-                device_id: group.device_id,
-                received_at: group.received_at,
-                co2_ppm: group.co2_values.length > 0 ? Math.round(group.co2_values.reduce((a, b) => a + b, 0) / group.co2_values.length) : 0,
-                h2s_ppm: group.h2s_values.length > 0 ? Math.round((group.h2s_values.reduce((a, b) => a + b, 0) / group.h2s_values.length) * 100) / 100 : 0,
-                voltage: group.voltage_values.length > 0 ? Math.round((group.voltage_values.reduce((a, b) => a + b, 0) / group.voltage_values.length) * 100) / 100 : 0
-            })).sort((a, b) => new Date(a.received_at) - new Date(b.received_at));
-        };
-
-        const applySmoothing = (data, windowSize = 3) => {
-            if (data.length < windowSize || !smoothingEnabled) return data;
-            const smoothed = [...data];
-            for (let i = Math.floor(windowSize / 2); i < data.length - Math.floor(windowSize / 2); i++) {
-                const window = data.slice(i - Math.floor(windowSize / 2), i + Math.floor(windowSize / 2) + 1);
-                smoothed[i].co2_ppm = Math.round(window.reduce((sum, item) => sum + item.co2_ppm, 0) / window.length);
-                smoothed[i].h2s_ppm = Math.round((window.reduce((sum, item) => sum + item.h2s_ppm, 0) / window.length) * 100) / 100;
-            }
-            return smoothed;
-        };
-
         const loadSensorData = async () => {
             try {
                 const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -480,7 +398,7 @@
         const getLatestDataByDevice = (data) => {
             const deviceData = new Map();
             const currentTime = new Date();
-            const oneHourAgo = 60 * 60 * 1000; // 1 jam dalam milidetik
+            const oneHourAgo = 60 * 60 * 1000;
             
             data.forEach(record => {
                 const existing = deviceData.get(record.device_id);
@@ -489,28 +407,26 @@
                 }
             });
             
-            // Filter: hanya tampilkan device yang datanya tidak lebih dari 1 jam
             return Array.from(deviceData.values())
                 .filter(device => {
                     let lastDataTime = new Date(device.received_at);
                     let timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
                     
-                    // Auto-correction untuk timezone issue
                     if (timeDiffMs < -300000) {
                         lastDataTime = new Date(lastDataTime.getTime() - (7 * 60 * 60 * 1000));
                         timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
                     }
                     
-                    // Hanya tampilkan jika kurang dari 1 jam
                     return timeDiffMs < oneHourAgo;
                 })
                 .sort((a, b) => parseInt(a.device_id) - parseInt(b.device_id));
         };
 
-        const getDeviceHistoryData = (deviceId, intervalMinutes) => {
-            const deviceData = sensorData.filter(record => record.device_id === deviceId);
-            const aggregated = aggregateData(deviceData, intervalMinutes);
-            return applySmoothing(aggregated).slice(-20);
+        const getDeviceHistoryData = (deviceId) => {
+            return sensorData
+                .filter(record => record.device_id === deviceId)
+                .sort((a, b) => new Date(a.received_at) - new Date(b.received_at))
+                .slice(-20);
         };
 
         const createMiniChart = (canvasId) => {
@@ -607,7 +523,6 @@
             }
             deviceCharts.forEach(chart => chart.destroy());
             deviceCharts.clear();
-            const intervalMinutes = parseInt(document.getElementById('interval').value);
             gridEl.innerHTML = latestData.map(device => {
                 const batteryPercent = getBatteryPercent(device.voltage);
                 const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
@@ -631,29 +546,13 @@
                     const chart = createMiniChart(`chart_${device.device_id}`);
                     if (chart) {
                         deviceCharts.set(device.device_id, chart);
-                        const historyData = getDeviceHistoryData(device.device_id, intervalMinutes);
+                        const historyData = getDeviceHistoryData(device.device_id);
                         updateMiniChart(chart, historyData);
                     }
                 });
                 setTimeout(updateStatusIndicators, 200);
             }, 100);
         };
-
-        const updateAllCharts = () => {
-            const intervalMinutes = parseInt(document.getElementById('interval').value);
-            deviceCharts.forEach((chart, deviceId) => {
-                const historyData = getDeviceHistoryData(deviceId, intervalMinutes);
-                updateMiniChart(chart, historyData);
-            });
-        };
-
-        const toggleSmoothing = () => {
-            smoothingEnabled = !smoothingEnabled;
-            document.getElementById('smoothBtn').textContent = smoothingEnabled ? 'Disable Smoothing' : 'Enable Smoothing';
-            updateAllCharts();
-        };
-
-        document.getElementById('interval').addEventListener('change', updateAllCharts);
 
         const init = async () => {
             await loadSensorData();
