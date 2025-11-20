@@ -99,6 +99,11 @@
             overflow: hidden;
         }
         
+        .node-card.offline-card {
+            opacity: 0.7;
+            background-color: #f8f9fa;
+        }
+        
         .node-header {
             background-color: #34495e;
             color: white;
@@ -106,6 +111,10 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+        
+        .node-header.offline-header {
+            background-color: #6c757d;
         }
         
         .node-header h2 {
@@ -155,6 +164,10 @@
             border: 1px solid #e9ecef;
         }
         
+        .sensor-item.offline-data {
+            background-color: #e9ecef;
+        }
+        
         .sensor-label {
             font-size: 0.8rem;
             color: #6c757d;
@@ -166,6 +179,11 @@
             font-size: 1.4rem;
             font-weight: bold;
             margin-bottom: 3px;
+        }
+        
+        .sensor-value.null-value {
+            color: #adb5bd;
+            font-size: 1.2rem;
         }
         
         .sensor-unit {
@@ -214,6 +232,9 @@
         }
         .danger-level {
             color: #dc3545;
+        }
+        .offline-level {
+            color: #6c757d;
         }
         
         .chart-container {
@@ -339,6 +360,7 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let sensorData = [];
         let latestDeviceData = new Map();
+        let deviceStatusMap = new Map(); // Menyimpan status online/offline tiap device
         let updateInterval;
         let statusUpdateInterval;
         let deviceCharts = new Map();
@@ -372,6 +394,26 @@
 
         const hideError = () => document.getElementById('error').style.display = 'none';
 
+        const isDeviceOffline = (receivedAt) => {
+            const currentTime = new Date();
+            let lastDataTime = new Date(receivedAt);
+            
+            if (isNaN(lastDataTime.getTime())) return true;
+            
+            let timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
+            
+            // Koreksi timezone jika diperlukan
+            if (timeDiffMs < -300000) {
+                lastDataTime = new Date(lastDataTime.getTime() - (7 * 60 * 60 * 1000));
+                timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
+            }
+            
+            const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / 60000);
+            
+            // Device dianggap offline jika lebih dari 3 menit tidak ada data
+            return timeDiffMinutes > 3;
+        };
+
         const loadSensorData = async () => {
             try {
                 const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -384,7 +426,15 @@
                 sensorData = data;
                 const latest = getLatestDataByDevice(data);
                 latestDeviceData.clear();
-                latest.forEach(device => latestDeviceData.set(device.device_id, device));
+                deviceStatusMap.clear();
+                
+                latest.forEach(device => {
+                    latestDeviceData.set(device.device_id, device);
+                    // Cek dan simpan status offline
+                    const offline = isDeviceOffline(device.received_at);
+                    deviceStatusMap.set(device.device_id, offline);
+                });
+                
                 renderSensorCards();
                 const now = new Date().toISOString();
                 document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(now)}`;
@@ -501,10 +551,21 @@
                 }
                 const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / 60000);
                 statusIndicator.classList.remove('offline', 'online');
+                
+                const wasOffline = deviceStatusMap.get(deviceId);
+                const isOffline = timeDiffMinutes > 3;
+                
+                // Jika status berubah dari online ke offline atau sebaliknya, render ulang card
+                if (wasOffline !== isOffline) {
+                    deviceStatusMap.set(deviceId, isOffline);
+                    renderSensorCards();
+                    return;
+                }
+                
                 if (timeDiffMs < 0 && timeDiffMs > -120000) {
                     statusText.textContent = `Online (just now)`;
                     statusIndicator.classList.add('online');
-                } else if (timeDiffMinutes > 3) {
+                } else if (isOffline) {
                     statusText.textContent = `Offline`;
                     statusIndicator.classList.add('offline');
                 } else {
@@ -523,24 +584,53 @@
             }
             deviceCharts.forEach(chart => chart.destroy());
             deviceCharts.clear();
+            
             gridEl.innerHTML = latestData.map(device => {
-                const batteryPercent = getBatteryPercent(device.voltage);
-                const co2Class = (device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level");
-                const h2sClass = (device.h2s_ppm < 10) ? "good-level" : ((device.h2s_ppm < 20) ? "warning-level" : "danger-level");
-                const batteryClass = (batteryPercent > 50) ? "good-level" : ((batteryPercent > 20) ? "warning-level" : "danger-level");
+                const isOffline = deviceStatusMap.get(device.device_id) || false;
+                
+                // Jika offline, set semua nilai ke null/N/A
+                const co2Value = isOffline ? 'N/A' : (device.co2_ppm || 0);
+                const h2sValue = isOffline ? 'N/A' : (device.h2s_ppm || 0);
+                const batteryPercent = isOffline ? 'N/A' : getBatteryPercent(device.voltage);
+                
+                const co2Class = isOffline ? "null-value" : ((device.co2_ppm < 1000) ? "good-level" : ((device.co2_ppm < 2000) ? "warning-level" : "danger-level"));
+                const h2sClass = isOffline ? "null-value" : ((device.h2s_ppm < 10) ? "good-level" : ((device.h2s_ppm < 20) ? "warning-level" : "danger-level"));
+                const batteryClass = isOffline ? "null-value" : ((batteryPercent > 50) ? "good-level" : ((batteryPercent > 20) ? "warning-level" : "danger-level"));
+                
                 let nodeStatus = "Normal", statusClass = "good-level", alertCount = 0;
-                if (device.co2_ppm > 2000) { nodeStatus = "CRITICAL CO2"; statusClass = "danger-level"; alertCount++; } 
-                else if (device.co2_ppm > 1000) { nodeStatus = "Warning CO2"; statusClass = "warning-level"; alertCount++; }
-                if (device.h2s_ppm > 20) { nodeStatus = "CRITICAL H2S"; statusClass = "danger-level"; alertCount++; } 
-                else if (device.h2s_ppm > 10) { if (statusClass != "danger-level") { nodeStatus = "Warning H2S"; statusClass = "warning-level"; } alertCount++; }
-                if (batteryPercent < 20) { nodeStatus = "Low Battery"; statusClass = "danger-level"; alertCount++; } 
-                else if (batteryPercent < 30) { if (statusClass == "good-level") { nodeStatus = "Battery Warning"; statusClass = "warning-level"; } alertCount++; }
+                
+                if (isOffline) {
+                    nodeStatus = "Offline";
+                    statusClass = "offline-level";
+                    alertCount = 0;
+                } else {
+                    if (device.co2_ppm > 2000) { nodeStatus = "CRITICAL CO2"; statusClass = "danger-level"; alertCount++; } 
+                    else if (device.co2_ppm > 1000) { nodeStatus = "Warning CO2"; statusClass = "warning-level"; alertCount++; }
+                    if (device.h2s_ppm > 20) { nodeStatus = "CRITICAL H2S"; statusClass = "danger-level"; alertCount++; } 
+                    else if (device.h2s_ppm > 10) { if (statusClass != "danger-level") { nodeStatus = "Warning H2S"; statusClass = "warning-level"; } alertCount++; }
+                    if (batteryPercent < 20) { nodeStatus = "Low Battery"; statusClass = "danger-level"; alertCount++; } 
+                    else if (batteryPercent < 30) { if (statusClass == "good-level") { nodeStatus = "Battery Warning"; statusClass = "warning-level"; } alertCount++; }
+                }
+                
                 let aqi = "Good", aqiClass = "good-level", aqiValue = 50;
-                if (device.co2_ppm > 2000 || device.h2s_ppm > 20) { aqi = "Hazardous"; aqiClass = "danger-level"; aqiValue = 300; } 
-                else if (device.co2_ppm > 1500 || device.h2s_ppm > 15) { aqi = "Unhealthy"; aqiClass = "danger-level"; aqiValue = 200; } 
-                else if (device.co2_ppm > 1000 || device.h2s_ppm > 10) { aqi = "Moderate"; aqiClass = "warning-level"; aqiValue = 100; }
-                return `<div class="node-card" data-device-id="${device.device_id}"><div class="node-header"><h2>Node Sensor ${device.device_id}</h2><div class="node-status"><span class="status-text">Checking...</span><div class="status-indicator"></div></div></div><div class="node-content"><div class="sensor-grid"><div class="sensor-item"><div class="sensor-label">CO₂</div><div class="sensor-value ${co2Class}">${device.co2_ppm || 0}</div><div class="sensor-unit">PPM</div></div><div class="sensor-item"><div class="sensor-label">H₂S</div><div class="sensor-value ${h2sClass}">${device.h2s_ppm || 0}</div><div class="sensor-unit">PPM</div></div><div class="sensor-item"><div class="sensor-label">Battery</div><div class="sensor-value ${batteryClass}">${batteryPercent}</div><div class="sensor-unit">%</div></div><div class="sensor-item status-item"><div class="status-main ${statusClass}">${nodeStatus}</div><div class="status-details">${alertCount} Alert(s) Active</div><div class="aqi-info"><div class="aqi-label">Air Quality Index</div><div class="aqi-value ${aqiClass}">${aqi} (${aqiValue})</div></div></div><div class="chart-container"><canvas id="chart_${device.device_id}"></canvas></div></div></div></div>`;
+                if (isOffline) {
+                    aqi = "N/A";
+                    aqiClass = "offline-level";
+                    aqiValue = "-";
+                } else {
+                    if (device.co2_ppm > 2000 || device.h2s_ppm > 20) { aqi = "Hazardous"; aqiClass = "danger-level"; aqiValue = 300; } 
+                    else if (device.co2_ppm > 1500 || device.h2s_ppm > 15) { aqi = "Unhealthy"; aqiClass = "danger-level"; aqiValue = 200; } 
+                    else if (device.co2_ppm > 1000 || device.h2s_ppm > 10) { aqi = "Moderate"; aqiClass = "warning-level"; aqiValue = 100; }
+                }
+                
+                const cardClass = isOffline ? 'node-card offline-card' : 'node-card';
+                const headerClass = isOffline ? 'node-header offline-header' : 'node-header';
+                const sensorItemClass = isOffline ? 'sensor-item offline-data' : 'sensor-item';
+                const batteryUnit = isOffline ? '' : '%';
+                
+                return `<div class="${cardClass}" data-device-id="${device.device_id}"><div class="${headerClass}"><h2>Node Sensor ${device.device_id}</h2><div class="node-status"><span class="status-text">Checking...</span><div class="status-indicator"></div></div></div><div class="node-content"><div class="sensor-grid"><div class="${sensorItemClass}"><div class="sensor-label">CO₂</div><div class="sensor-value ${co2Class}">${co2Value}</div><div class="sensor-unit">${isOffline ? '' : 'PPM'}</div></div><div class="${sensorItemClass}"><div class="sensor-label">H₂S</div><div class="sensor-value ${h2sClass}">${h2sValue}</div><div class="sensor-unit">${isOffline ? '' : 'PPM'}</div></div><div class="${sensorItemClass}"><div class="sensor-label">Battery</div><div class="sensor-value ${batteryClass}">${batteryPercent}</div><div class="sensor-unit">${batteryUnit}</div></div><div class="sensor-item status-item"><div class="status-main ${statusClass}">${nodeStatus}</div><div class="status-details">${isOffline ? 'No connection' : alertCount + ' Alert(s) Active'}</div><div class="aqi-info"><div class="aqi-label">Air Quality Index</div><div class="aqi-value ${aqiClass}">${aqi} ${aqiValue !== '-' ? '(' + aqiValue + ')' : ''}</div></div></div><div class="chart-container"><canvas id="chart_${device.device_id}"></canvas></div></div></div></div>`;
             }).join('');
+            
             setTimeout(() => {
                 latestData.forEach(device => {
                     const chart = createMiniChart(`chart_${device.device_id}`);
@@ -556,8 +646,8 @@
 
         const init = async () => {
             await loadSensorData();
-            updateInterval = setInterval(loadSensorData, 30000);
-            statusUpdateInterval = setInterval(updateStatusIndicators, 30000);
+            updateInterval = setInterval(loadSensorData, 5000); // Refresh data setiap 5 detik
+            statusUpdateInterval = setInterval(updateStatusIndicators, 30000); // Update status setiap 5 detik
         };
 
         window.addEventListener('beforeunload', () => {
