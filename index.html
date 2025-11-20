@@ -504,7 +504,7 @@
                 if (timeDiffMs < 0 && timeDiffMs > -120000) {
                     statusText.textContent = `Online (just now)`;
                     statusIndicator.classList.add('online');
-                } else if (timeDiffMinutes > 60) {
+                } else if (timeDiffMinutes > 3) {
                     statusText.textContent = `Offline`;
                     statusIndicator.classList.add('offline');
                 } else {
