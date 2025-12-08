@@ -411,7 +411,7 @@
             const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / 60000);
             
             // Device dianggap offline jika lebih dari 3 menit tidak ada data
-            return timeDiffMinutes > 3;
+            return timeDiffMinutes > 1;
         };
 
         const loadSensorData = async () => {
