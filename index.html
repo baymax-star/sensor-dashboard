@@ -548,6 +548,7 @@
             chart.update('none');
         };
         
+        // --- BAGIAN INI DIUBAH UNTUK STATUS SEDERHANA ---
         const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             const currentTime = new Date();
@@ -584,14 +585,10 @@
                 statusIndicator.classList.remove('offline', 'online');
                 
                 if (isOffline) {
-                    statusText.textContent = `Offline (${timeDiffSeconds}s ago)`;
+                    statusText.textContent = "Offline";
                     statusIndicator.classList.add('offline');
                 } else {
-                    if (timeDiffSeconds < 10) {
-                        statusText.textContent = `Online (Live)`;
-                    } else {
-                        statusText.textContent = `Online (${timeDiffSeconds}s ago)`;
-                    }
+                    statusText.textContent = "Online";
                     statusIndicator.classList.add('online');
                 }
             });
