@@ -353,14 +353,18 @@
         </div>
     </div>
 
-    <script>
+   <script>
+  
+        const OFFLINE_THRESHOLD_SECONDS = 20; 
+
+
         const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let sensorData = [];
         let latestDeviceData = new Map();
-        let deviceStatusMap = new Map(); // Menyimpan status online/offline tiap device
+        let deviceStatusMap = new Map(); 
         let updateInterval;
         let statusUpdateInterval;
         let deviceCharts = new Map();
@@ -394,6 +398,7 @@
 
         const hideError = () => document.getElementById('error').style.display = 'none';
 
+        // --- FUNGSI DETEKSI OFFLINE  ---
         const isDeviceOffline = (receivedAt) => {
             const currentTime = new Date();
             let lastDataTime = new Date(receivedAt);
@@ -408,10 +413,11 @@
                 timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
             }
             
-            const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / 60000);
+        
+            const timeDiffSeconds = Math.floor(Math.abs(timeDiffMs) / 1000);
             
-            // Device dianggap offline jika lebih dari 3 menit tidak ada data
-            return timeDiffMinutes > 1;
+            // Menggunakan threshold yang sudah diset
+            return timeDiffSeconds > OFFLINE_THRESHOLD_SECONDS;
         };
 
         const loadSensorData = async () => {
@@ -426,16 +432,29 @@
                 sensorData = data;
                 const latest = getLatestDataByDevice(data);
                 latestDeviceData.clear();
-                deviceStatusMap.clear();
+                
+                // Jangan clear deviceStatusMap sepenuhnya agar tidak kedip, tapi update
+                const newDeviceStatusMap = new Map();
                 
                 latest.forEach(device => {
                     latestDeviceData.set(device.device_id, device);
-                    // Cek dan simpan status offline
                     const offline = isDeviceOffline(device.received_at);
-                    deviceStatusMap.set(device.device_id, offline);
+                    newDeviceStatusMap.set(device.device_id, offline);
                 });
+
+                let needFullRender = false;
+                if (deviceStatusMap.size !== newDeviceStatusMap.size) {
+                    needFullRender = true;
+                } else {
+                    newDeviceStatusMap.forEach((isOffline, id) => {
+                        if (deviceStatusMap.get(id) !== isOffline) needFullRender = true;
+                    });
+                }
+
+                deviceStatusMap = newDeviceStatusMap;
                 
                 renderSensorCards();
+                
                 const now = new Date().toISOString();
                 document.getElementById('lastUpdate').textContent = `Terakhir diperbarui: ${formatTime(now)}`;
                 hideError();
@@ -532,28 +551,28 @@
         const updateStatusIndicators = () => {
             if (latestDeviceData.size === 0) return;
             const currentTime = new Date();
+            
             latestDeviceData.forEach((deviceData, deviceId) => {
                 const card = document.querySelector(`.node-card[data-device-id="${deviceId}"]`);
                 if (!card) return;
+                
                 const statusText = card.querySelector('.status-text');
                 const statusIndicator = card.querySelector('.status-indicator');
                 if (!statusText || !statusIndicator) return;
+                
                 let lastDataTime = new Date(deviceData.received_at);
-                if (isNaN(lastDataTime.getTime())) {
-                    statusText.textContent = 'Unknown';
-                    statusIndicator.classList.remove('online', 'offline');
-                    return;
-                }
+                if (isNaN(lastDataTime.getTime())) return;
+                
                 let timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
                 if (timeDiffMs < -300000) {
                     lastDataTime = new Date(lastDataTime.getTime() - (7 * 60 * 60 * 1000));
                     timeDiffMs = currentTime.getTime() - lastDataTime.getTime();
                 }
-                const timeDiffMinutes = Math.floor(Math.abs(timeDiffMs) / 60000);
-                statusIndicator.classList.remove('offline', 'online');
                 
+                const timeDiffSeconds = Math.floor(Math.abs(timeDiffMs) / 1000);
+                
+                const isOffline = timeDiffSeconds > OFFLINE_THRESHOLD_SECONDS;
                 const wasOffline = deviceStatusMap.get(deviceId);
-                const isOffline = timeDiffMinutes > 3;
                 
                 // Jika status berubah dari online ke offline atau sebaliknya, render ulang card
                 if (wasOffline !== isOffline) {
@@ -562,14 +581,17 @@
                     return;
                 }
                 
-                if (timeDiffMs < 0 && timeDiffMs > -120000) {
-                    statusText.textContent = `Online (just now)`;
-                    statusIndicator.classList.add('online');
-                } else if (isOffline) {
-                    statusText.textContent = `Offline`;
+                statusIndicator.classList.remove('offline', 'online');
+                
+                if (isOffline) {
+                    statusText.textContent = `Offline (${timeDiffSeconds}s ago)`;
                     statusIndicator.classList.add('offline');
                 } else {
-                    statusText.textContent = `Online`;
+                    if (timeDiffSeconds < 10) {
+                        statusText.textContent = `Online (Live)`;
+                    } else {
+                        statusText.textContent = `Online (${timeDiffSeconds}s ago)`;
+                    }
                     statusIndicator.classList.add('online');
                 }
             });
@@ -582,13 +604,14 @@
                 gridEl.innerHTML = '<div class="no-data">Tidak ada data sensor tersedia</div>';
                 return;
             }
+            
+            // Hancurkan chart lama agar tidak memory leak
             deviceCharts.forEach(chart => chart.destroy());
             deviceCharts.clear();
             
             gridEl.innerHTML = latestData.map(device => {
                 const isOffline = deviceStatusMap.get(device.device_id) || false;
                 
-                // Jika offline, set semua nilai ke null/N/A
                 const co2Value = isOffline ? 'N/A' : (device.co2_ppm || 0);
                 const h2sValue = isOffline ? 'N/A' : (device.h2s_ppm || 0);
                 const batteryPercent = isOffline ? 'N/A' : getBatteryPercent(device.voltage);
@@ -640,14 +663,14 @@
                         updateMiniChart(chart, historyData);
                     }
                 });
-                setTimeout(updateStatusIndicators, 200);
+                setTimeout(updateStatusIndicators, 100);
             }, 100);
         };
 
         const init = async () => {
             await loadSensorData();
-            updateInterval = setInterval(loadSensorData, 5000); // Refresh data setiap 5 detik
-            statusUpdateInterval = setInterval(updateStatusIndicators, 30000); // Update status setiap 5 detik
+            updateInterval = setInterval(loadSensorData, 5000); 
+            statusUpdateInterval = setInterval(updateStatusIndicators, 3000); 
         };
 
         window.addEventListener('beforeunload', () => {
@@ -661,8 +684,8 @@
                 if (updateInterval) clearInterval(updateInterval);
                 if (statusUpdateInterval) clearInterval(statusUpdateInterval);
             } else {
-                updateInterval = setInterval(loadSensorData, 30000);
-                statusUpdateInterval = setInterval(updateStatusIndicators, 5000);
+                updateInterval = setInterval(loadSensorData, 5000);
+                statusUpdateInterval = setInterval(updateStatusIndicators, 3000);
                 loadSensorData();
             }
         });
