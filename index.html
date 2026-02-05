@@ -361,7 +361,10 @@
         const SUPABASE_URL = 'https://aydpmoleewyaukeghnrr.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5ZHBtb2xlZXd5YXVrZWdobnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODY4MjAsImV4cCI6MjA2NjU2MjgyMH0.WDQD0L1bwjwQilmy_7j0U0mBHCA7SQXE47lZYiIHRpk';
         
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+        );
         let sensorData = [];
         let latestDeviceData = new Map();
         let deviceStatusMap = new Map(); 
@@ -423,7 +426,7 @@
         const loadSensorData = async () => {
             try {
                 const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-                const { data, error } = await supabase.from('sensor_data_complete').select('*').gte('received_at', startTime).order('received_at', { ascending: false });
+                const { data, error } = await supabaseClient.from('sensor_data_complete').select('*').gte('received_at', startTime).order('received_at', { ascending: false });
                 if (error) throw new Error(`Database error: ${error.message}`);
                 if (!data || data.length === 0) {
                     document.getElementById('sensorGrid').innerHTML = '<div class="no-data">Tidak ada data sensor dalam 24 jam terakhir</div>';
